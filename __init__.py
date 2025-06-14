@@ -5,10 +5,39 @@ from anki.notes import Note
 
 
 
+
+
 #Main selection window to all for various AnkiExam tools
 # ...existing imports...
 
 DEBUG = False
+#initialize uploaded pdf content
+uploaded_txt_content = {"content": ""}
+
+questions_cycle = {
+    "questions": [],
+    "index": 0
+}
+
+from PyQt6.QtCore import QThread, pyqtSignal
+
+
+#Worker thread to handle question generation
+class AnswerWorker(QThread):
+    finished = pyqtSignal(str, int)
+    error = pyqtSignal(str)
+    def __init__(self, user_answer, question):
+        super().__init__()
+        self.user_answer = user_answer
+        self.question = question
+    def run(self):
+        try:
+            from .main import together_api_input
+            output, total_tokens = together_api_input(self.user_answer, self.question)
+            self.finished.emit(output, total_tokens)
+        except Exception as e:
+            self.error.emit(str(e))
+
 
 # Helper to create a styled, centered button
 def make_button(text, on_click):
@@ -28,6 +57,7 @@ def make_button(text, on_click):
 
 #Main selection window to all for various AnkiExam tools
 def selection_window_gui():
+    #from .pdf_training import uploaded_txt_content #import cached uploaded content
     dlg = QDialog(mw)
     dlg.setWindowTitle("AnkiExam Tool Selection")
     dlg.setStyleSheet("background-color: #ff91da; color: white; font-weight: bold; font-size: 16px;")
@@ -39,9 +69,26 @@ def selection_window_gui():
     label.setAlignment(Qt.AlignmentFlag.AlignCenter)
     layout.addWidget(label)
 
+    # If a TXT file is in cache, show a box
+    if uploaded_txt_content.get("content"):
+        cache_label = QLabel("PDF File in Cache")
+        cache_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        cache_label.setStyleSheet("background: #fff3cd; color: #856404; border: 1px solid #ffeeba; border-radius: 4px; padding: 8px; font-size: 14px;")
+        layout.addWidget(cache_label)
+
+    if questions_cycle.get("questions"):
+        # If questions are in cache, show a box
+        cache_label = QPushButton("Questions are in Cache")
+        cache_label.setStyleSheet("background: #fff3cd; color: #856404; border: 1px solid #ffeeba; border-radius: 4px; padding: 8px; font-size: 14px;")
+        #layout.addWidget(cache_label)
+        layout.addWidget(make_button("Inspect Cache", inspect_cache))
+
+
     # Button 1: Input Training Data
     def on_training():
-        showInfo("To be implemented: Input Training Data")
+        dlg.accept()
+        from .pdf_training import show_txt_training_gui
+        show_txt_training_gui()
     layout.addWidget(make_button("Input Training Data", on_training))
 
     # Button 2: Input Question
@@ -59,6 +106,26 @@ def selection_window_gui():
     dlg.setMinimumWidth(400)
     dlg.setMinimumHeight(300)
     dlg.exec()
+    
+# Function to inspect the cache of questions
+
+def inspect_cache():
+    dlg = QDialog(mw)
+    dlg.setWindowTitle("Cache Inspection")
+    from .pdf_training import questions_cycle  # Ensure you use the shared dict
+    questions = questions_cycle["questions"]
+    showInfo(f"Questions: {(questions)}")
+    if not questions:
+        showInfo("No questions in cache!")
+        return
+    dlg.setMinimumWidth(800)
+    dlg.setMinimumHeight(200)
+    dlg.setStyleSheet("background-color: #ff91da; color: white; font-weight: bold; font-size: 16px;")
+    layout = QVBoxLayout()
+    layout.setAlignment(Qt.AlignmentFlag.AlignTop)
+    layout.addWidget(make_button("Close", dlg.accept))
+    dlg.setLayout(layout)
+    dlg.exec()
 
 #Here is eventually where i will feed through the question from the training data:
 #DYNAMIC_STRING = "This is a dynamic string. Change me as needed!"
@@ -67,13 +134,26 @@ QuestionToAsk = "What is the capital of Canada?"
 
 #a new custom gui funciton
 def show_custom_gui():
+    from .pdf_training import questions_cycle  # Ensure you use the shared dict
+    #import that is imported from pdf_training.py
+
+    questions = questions_cycle["questions"]
+    idx = questions_cycle["index"]
+    #showInfo(f"Current question index: {idx}, Total questions: {len(questions)}")
+
+    if not questions or idx >= len(questions):
+        showInfo("No more questions!")
+        return
+
+    QuestionToAsk = questions[idx]
+
     dlg = QDialog(mw)
     dlg.setWindowTitle("AnkiExam Tool")
     dlg.setMinimumWidth(800)
     dlg.setMinimumHeight(200)
     dlg.setStyleSheet("background-color: #ff91da; color: white; font-weight: bold; font-size: 16px;")
     layout = QVBoxLayout()
-    layout.setAlignment(Qt.AlignmentFlag.AlignTop)  # Align content to top
+    layout.setAlignment(Qt.AlignmentFlag.AlignTop)
 
     label = QLabel("Please enter your answer to the question below.\n\n")
     label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -86,7 +166,7 @@ def show_custom_gui():
     layout.addWidget(dynamic_label)
 
     input_field = QLineEdit()
-    input_field.setPlaceholderText("Type your question here...")
+    input_field.setPlaceholderText("Type your answer here...")
     input_field.setFixedHeight(36)
     input_field.setStyleSheet("font-weight: bold; color: black; background-color: gray; border-radius: 4px; font-size: 12px;")
     layout.addWidget(input_field)
@@ -105,24 +185,64 @@ def show_custom_gui():
     def on_accept():
         user_answer_input_field = input_field.text()
         if not user_answer_input_field.strip():
-            showInfo("Please enter a question.")
+            showInfo("Please enter an answer.")
             return
-        try:
-            from .main import together_api_input
-            output, total_tokens = together_api_input(user_answer_input_field, QuestionToAsk)
-        except Exception as e:
-            showInfo(f"API Error: {e}")
-            return
-        popup = QDialog(mw)
-        popup.setWindowTitle("API Output")
-        popup_layout = QVBoxLayout()
-        popup_label = QLabel(f"User's Answer: {user_answer_input_field}, \n\nOutput:\n{output}, \n\nTotal Tokens: {total_tokens}")
-        popup_label.setWordWrap(True)
-        popup_label.setStyleSheet("font-size: 14px;")
-        popup_layout.addWidget(popup_label)
-        popup.setLayout(popup_layout)
-        popup.exec()
-        dlg.accept()
+
+        btn.setEnabled(False)
+
+        # Show loading dialog
+        loading_dialog = QDialog(dlg)
+        loading_dialog.setWindowTitle("Answer Loading...")
+        loading_layout = QVBoxLayout()
+        loading_label = QLabel("Checking your answer, please wait...")
+        loading_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        loading_layout.addWidget(loading_label)
+        loading_dialog.setWindowModality(Qt.WindowModality.WindowModal)  # Modal to dlg
+        loading_dialog.raise_()
+        loading_dialog.activateWindow()
+
+        progress = QProgressBar()
+        progress.setRange(0, 0)
+        loading_layout.addWidget(progress)
+        loading_dialog.setLayout(loading_layout)
+        loading_dialog.setMinimumWidth(400)
+        loading_dialog.setMinimumHeight(120)
+        loading_dialog.show()
+        QApplication.processEvents()
+
+        # Start answer worker
+        worker = AnswerWorker(user_answer_input_field, QuestionToAsk)
+        dlg.worker = worker  # Prevent GC
+
+        def on_finished(output, total_tokens):
+            loading_dialog.close()
+            #can also switcht to the dlg window if you want to keep the style
+            popup = QDialog(mw)
+            popup.setWindowTitle("API Output")
+            popup_layout = QVBoxLayout()
+            popup_label = QLabel(f"User's Answer: {user_answer_input_field}, \n\nOutput:\n{output}, \n\nTotal Tokens: {total_tokens}")
+            popup_label.setWordWrap(True)
+            popup_label.setStyleSheet("font-size: 14px;")
+            popup_layout.addWidget(popup_label)
+            popup.setLayout(popup_layout)
+            popup.exec()
+            dlg.accept()
+            questions_cycle["index"] += 1
+            if questions_cycle["index"] < len(questions_cycle["questions"]):
+                show_custom_gui()
+            else:
+                showInfo("You have completed all questions!")
+            dlg.worker = None
+
+        def on_error(error_msg):
+            loading_dialog.close()
+            showInfo(f"API Error: {error_msg}")
+            btn.setEnabled(True)
+            dlg.worker = None
+
+        worker.finished.connect(on_finished)
+        worker.error.connect(on_error)
+        worker.start()
 
     btn.clicked.connect(on_accept)
     dlg.exec()
