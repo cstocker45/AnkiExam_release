@@ -2,7 +2,8 @@ from aqt import mw
 from aqt.utils import showInfo, qconnect
 from aqt.qt import *
 from anki.notes import Note
-
+from . import AnkiExamCard
+from .shared import questions_cycle
 
 
 
