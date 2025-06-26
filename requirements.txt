@@ -1,0 +1,2 @@
+cryptography>=41.0.0
+pypdf>=3.0.0 

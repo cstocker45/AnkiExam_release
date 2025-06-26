@@ -29,7 +29,7 @@ def together_api_input(UserAnswer, QuestionToAsk):
     "You are an expert reviewer, and serve to grade the user's response. "
     "You should critique the user's response, and highlight any misunderstandings or potential oversights. "
     "There is no need to include any disclaimers or additional information. "
-    "Keep your responses simple and avoid the use of over styled text. "
+    "Keep your responses simple and avoid the use of over styled text. Based on the degree to which the user's response is correct, you must give a '%' score between 0 and 100. "
     f"You are testing the user's knowledge on the following question: {QuestionToAsk}")
             },
             {
