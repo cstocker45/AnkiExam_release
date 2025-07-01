@@ -13,7 +13,9 @@ import os
 import uuid
 import re
 from datetime import datetime
+import time
 from .models import uploaded_txt_content, QuestionWorker
+from aqt import gui_hooks
 
 
 
@@ -1259,70 +1261,230 @@ def extract_deck_content(deck_name=None):
     # Join all content with double newlines
     return "\n\n".join(content)
 
-def train_from_deck():
-    """
-    Extract content from a deck and use it for training.
-    """
+def train_from_deck(deck_name):
+    """Train on cards from a specific deck."""
     if not mw.col:
         showInfo("Anki collection not available.")
         return
         
-    # Extract content from deck
-    content = extract_deck_content()
-    if not content:
+    showInfo(f"Training from deck: {deck_name}")
+    # Get all cards from the deck
+    card_ids = mw.col.find_cards(f"deck:{deck_name}")
+    if not card_ids:
+        showInfo("No cards found in deck")
         return
         
-    # Update the shared content variable
-    if "content" in uploaded_txt_content:
-        uploaded_txt_content["content"] = content
-    else:
-        uploaded_txt_content.update({"content": content})
+    # Get card contents
+    cards_content = []
+    for card_id in card_ids:
+        card = mw.col.get_card(card_id)
+        note = card.note()
+        # Get the first field as content
+        if note.fields:
+            cards_content.append(note.fields[0])
     
-    # Create and run the worker
-    worker = QuestionWorker()
+    # Join all content with newlines
+    combined_content = "\n\n".join(cards_content)
     
-    # Use an event loop to wait for the worker to finish
-    loop = QEventLoop()
+    # Store in uploaded_txt_content
+    uploaded_txt_content["content"] = combined_content
+    uploaded_txt_content["file_name"] = f"deck_{deck_name}.txt"
     
-    def on_finished(questions_text, questions_list):
-        # Store the questions in a dictionary for later use
-        questions_cycle["index"] = 0
-        questions_cycle["questions"] = questions_list
-        loop.quit()
+    # Initialize questions cycle
+    questions_cycle["index"] = 0
+    questions_cycle["questions"] = []  # We'll populate this later
     
-    def on_error(error_msg):
-        showInfo(f"Error generating questions: {error_msg}")
-        loop.quit()
-    
-    worker.finished.connect(on_finished)
-    worker.error.connect(on_error)
-    worker.start()
-    
-    # Wait for the worker to finish
-    loop.exec()
+    # Process the deck content
+    if uploaded_txt_content["content"]:
+        # This would typically be where we generate questions from the content
+        # For now, we'll just show a debug message
+        showInfo(f"Deck content processed: {uploaded_txt_content['file_name']}")
 
-def read_file_content(file_path: str) -> str:
-    """Read content from either a TXT or PDF file."""
-    if file_path.lower().endswith('.pdf'):
-        try:
-            # Try to import pypdf
-            try:
-                from pypdf import PdfReader
-            except ImportError:
-                raise ImportError("PDF support requires the pypdf package. Please install it using pip install pypdf")
+def inject_train_buttons(*args):
+    """Inject a train button next to each deck name in the deck browser."""
+    # Only run if we're actually in the deck browser view
+    if not mw.state == 'deckBrowser':
+        return
+
+    # Only inject if the webview exists
+    if not hasattr(mw, 'deckBrowser') or not mw.deckBrowser or not mw.deckBrowser.web:
+        return
+
+    js = """
+    (function() {
+        // Add CSS for the button
+        var style = document.createElement('style');
+        style.textContent = `
+            .train-btn {
+                color: white;
+                border: none;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 12px;
+                margin-left: 8px;
+                cursor: pointer;
+                display: inline-block;
+                vertical-align: middle;
+                transition: background-color 0.3s ease;
+            }
+            .train-btn:hover {
+                background-color: #27ae60;
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Find all deck rows (they have class "deck" and are inside tr elements)
+        var deckRows = document.querySelectorAll('tr.deck');
+        if (deckRows.length === 0) {
+            return;
+        }
+        
+        deckRows.forEach(function(row) {
+            // Find the deck name cell (td with class "decktd")
+            var nameCell = row.querySelector('td.decktd');
+            if (!nameCell) {
+                return;
+            }
+            
+            // Find the deck link inside the cell
+            var link = nameCell.querySelector('a.deck');
+            if (!link) {
+                return;
+            }
+            
+            // Check if button already exists
+            if (nameCell.querySelector('.train-btn')) {
+                return;
+            }
+            
+            // Create train button with initial color
+            var btn = document.createElement('button');
+            btn.className = 'train-btn';
+            btn.textContent = 'Train';
+            btn.style.backgroundColor = '#2ecc71'; // Initial green color
+            
+            // Store the link reference on the button
+            btn.dataset.deckLink = link.textContent.trim();
+            
+            // Add click handler that matches Anki's built-in pattern exactly
+            btn.onclick = function() {
+                // Change color to orange when clicked
+                this.style.backgroundColor = '#e67e22';
                 
-            with open(file_path, "rb") as f:
-                reader = PdfReader(f)
-                text = "\n\n".join([page.extract_text() or '' for page in reader.pages])
-            if len(text) > 400000:
-                raise ValueError("PDF is too long")
-            return text
-        except Exception as e:
-            raise Exception(f"Error reading PDF: {str(e)}")
-    else:  # Assume TXT file
-        with open(file_path, "r", encoding="utf-8") as f:
-            return f.read()
+                // Escape the deck name for the search query
+                var deckName = this.dataset.deckLink.replace(/:/g, '\\:')
+                        .replace(/\s+/g, ' ')
+                        .trim();
+                
+                // Send the command with escaped name
+                pycmd('train:' + deckName);
+                
+                // Change color to blue while waiting for response
+                this.style.backgroundColor = '#3498db';
+                
+                // Return false to prevent default action
+                return false;
+            };
+            
+            // Add event listener for compatibility
+            btn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Change color to purple when event listener is triggered
+                this.style.backgroundColor = '#9b59b6';
+                
+                // Call the onclick handler
+                var result = this.onclick();
+                
+                // Change color back to green if onclick returns true
+                if (result === true) {
+                    this.style.backgroundColor = '#2ecc71';
+                }
+                
+                return result;
+            });
+            
+            // Send debug info to Python side
+            pycmd('anki_exam_debug:Button properties: ' + JSON.stringify({
+                className: btn.className,
+                hasClickHandler: !!btn.onclick,
+                clickHandlerType: typeof btn.onclick,
+                hasEventListener: btn.closest('tr') ? 'using parent event listener' : 'no parent found',
+                eventListeners: btn.addEventListener ? 'supported' : 'not supported'
+            }));
+            
+            // Insert after the link
+            link.parentNode.insertBefore(btn, link.nextSibling);
+        });
+    })();
+    
+    // Save the HTML after injection
+    pycmd('anki_exam_save_html');
+    """
+    mw.deckBrowser.web.eval(js)
+       
 
 
+
+# Global message counter
+message_count = 0
+
+
+def handle_bridge_cmd(message):
+    """Handle bridge commands from JavaScript."""
+    global message_count
+    message_count += 1
+    
+    if isinstance(message, str):
+        if message.startswith("anki_exam_debug:"):
+            debug_msg = message.split(":", 1)[1]
+            #commenting out the anki_exam_debug... at least the debug messages are being sent...
+            #showInfo(f"DEBUG #{message_count}: {debug_msg}", parent=mw)
+            return True
+        elif message.startswith("train:"):
+            # Extract and unescape the deck name
+            deck_name = message.split(":", 1)[1].replace('\\:', ':')
+            showInfo(f"DEBUG #{message_count}: Training deck {deck_name}", parent=mw)
+            train_from_deck(deck_name)
+            return True
+    return False
+
+# Global cooldown variables
+message_cooldown = 5  # 5 second cooldown
+last_message_time = 0
+
+def handle_webview_message(handled, message, context):
+    """Handle messages specifically for our addon with cooldown."""
+    global last_message_time
+    
+    # Check if we're still in cooldown
+    current_time = time.time()
+    if current_time - last_message_time < message_cooldown:
+        #showInfo(f"DEBUG: Cooldown active - ignoring message", parent=mw)
+        return (False, None)
+    
+    # Only handle messages from our addon
+    if not isinstance(message, str):
+        return (False, None)
+    
+    # Check if this is our addon's message
+    if not message.startswith('train:') and not message.startswith('anki_exam_debug:'):
+        return (False, None)
+    
+    # Handle the message
+    if handle_bridge_cmd(message):
+        # Update last message time when handling a message
+        last_message_time = current_time
+        return (True, None)
+    
+    return (False, None)
+
+# Add hooks
+gui_hooks.deck_browser_did_render.append(inject_train_buttons)
+
+# Uncomment the webview message handler
+showInfo("Registering webview message handler", parent=mw)
+gui_hooks.webview_did_receive_js_message.append(handle_webview_message)
 
 
