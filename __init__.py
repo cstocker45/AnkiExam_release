@@ -3,6 +3,7 @@ from aqt.utils import showInfo, qconnect
 from aqt.qt import *
 from anki.notes import Note
 from . import AnkiExamCard
+from .pdf_training import read_file_content
 from .shared import credential_manager, questions_cycle
 from . import ClientAuth
 from PyQt6.QtCore import QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QEvent, QObject, QTimer
@@ -689,7 +690,7 @@ def selection_window_gui():
         layout.addWidget(btn_container)
 
         def on_upload():
-            file_path, _ = QFileDialog.getOpenFileName(None, "Select File", "", "All Supported Files (*.txt *.pdf);;Text Files (*.txt);;PDF Files (*.pdf)")
+            file_path, _ = QFileDialog.getOpenFileName(None, "Select File", "", "All Supported Files (*.txt);;Text Files (*.txt);;PDF Files (*.pdf)")
             if file_path:
                 file_label.setText(f"Selected: {file_path}")
                 try:
@@ -1261,19 +1262,39 @@ def extract_deck_content(deck_name=None):
     # Join all content with double newlines
     return "\n\n".join(content)
 
-def train_from_deck(deck_name):
-    """Train on cards from a specific deck."""
+#02.07.2025 for some reason decks with spaces are not being detected but those with no spaces are okay...
+#this is an issue with the way these spaceare being stored in anki's backend.
+
+def train_from_deck(deck_id):
+    """Train on cards from a specific deck by ID."""
     if not mw.col:
         showInfo("Anki collection not available.")
         return
         
-    showInfo(f"Training from deck: {deck_name}")
-    # Get all cards from the deck
-    card_ids = mw.col.find_cards(f"deck:{deck_name}")
-    if not card_ids:
-        showInfo("No cards found in deck")
+    try:
+        # Convert to integer in case it's a string
+        deck_id = str(deck_id)
+    except ValueError:
+        showInfo(f"Invalid deck ID: {deck_id}")
         return
         
+    # Get deck by ID
+    deck = mw.col.decks.get(deck_id)
+    if not deck:
+        showInfo(f"Deck with ID {deck_id} not found")
+        return
+        
+    deck_name = deck['name']
+    showInfo(f"Training from deck: {deck_name} (ID: {deck_id})")
+    
+    # Get all cards from the deck using ID
+    card_ids = mw.col.find_cards(f"did:{deck_id}")
+    showInfo(f"Found {len(card_ids)} cards in deck")
+    
+    if not card_ids:
+        showInfo(f"No cards found in deck '{deck_name}'")
+        return
+    
     # Get card contents
     cards_content = []
     for card_id in card_ids:
@@ -1290,16 +1311,40 @@ def train_from_deck(deck_name):
     uploaded_txt_content["content"] = combined_content
     uploaded_txt_content["file_name"] = f"deck_{deck_name}.txt"
     
-    # Initialize questions cycle
-    questions_cycle["index"] = 0
-    questions_cycle["questions"] = []  # We'll populate this later
+    # Debug: Check content before passing
+    content_length = len(combined_content) if combined_content else 0
+    showInfo(f"Content length before training: {content_length} characters")
     
-    # Process the deck content
-    if uploaded_txt_content["content"]:
-        # This would typically be where we generate questions from the content
-        # For now, we'll just show a debug message
-        showInfo(f"Deck content processed: {uploaded_txt_content['file_name']}")
-
+    try:
+        # Save content to file
+        addon_dir = os.path.dirname(__file__)
+        content_file = os.path.join(addon_dir, "uploaded_txt_content.txt")
+        
+        showInfo("Saving content to file...")
+        with open(content_file, "w", encoding="utf-8") as f:
+            f.write(combined_content)
+        showInfo(f"Saved deck content to {content_file}")
+        
+        # Start training on this content
+        showInfo("Starting training process...")
+        from .pdf_training import train_model_on_text
+        train_model_on_text(combined_content)
+        showInfo("Training process completed")
+        
+    except Exception as e:
+        showInfo(f"Error in train_from_deck: {str(e)}")
+        import traceback
+        showInfo(f"Traceback: {traceback.format_exc()}")
+        # Try to log the error to a file as well
+        try:
+            error_log = os.path.join(addon_dir, "error_log.txt")
+            with open(error_log, "a", encoding="utf-8") as f:
+                f.write(f"{datetime.now()} - Error in train_from_deck:\n")
+                f.write(f"{str(e)}\n")
+                f.write(f"{traceback.format_exc()}\n\n")
+        except:
+            pass  # If we can't log the error, at least we tried
+    
 def inject_train_buttons(*args):
     """Inject a train button next to each deck name in the deck browser."""
     # Only run if we're actually in the deck browser view
@@ -1311,117 +1356,41 @@ def inject_train_buttons(*args):
         return
 
     js = """
-    (function() {
-        // Add CSS for the button
-        var style = document.createElement('style');
-        style.textContent = `
-            .train-btn {
-                color: white;
-                border: none;
-                padding: 4px 8px;
-                border-radius: 4px;
-                font-size: 12px;
-                margin-left: 8px;
-                cursor: pointer;
-                display: inline-block;
-                vertical-align: middle;
-                transition: background-color 0.3s ease;
-            }
-            .train-btn:hover {
-                background-color: #27ae60;
-            }
-        `;
-        document.head.appendChild(style);
-
-        // Find all deck rows (they have class "deck" and are inside tr elements)
-        var deckRows = document.querySelectorAll('tr.deck');
-        if (deckRows.length === 0) {
-            return;
-        }
+    // Wait for the page to load
+    setTimeout(function() {
+        // For each deck row
+        $('tr.deck').each(function() {
+            var $row = $(this);
+            var deckId = $row.attr('id');  // Get the deck ID from the row's id attribute
+            var $deckLink = $row.find('a.deck');
+            var deckName = $deckLink.text().trim();
         
-        deckRows.forEach(function(row) {
-            // Find the deck name cell (td with class "decktd")
-            var nameCell = row.querySelector('td.decktd');
-            if (!nameCell) {
-                return;
-            }
-            
-            // Find the deck link inside the cell
-            var link = nameCell.querySelector('a.deck');
-            if (!link) {
-                return;
-            }
-            
             // Check if button already exists
-            if (nameCell.querySelector('.train-btn')) {
-                return;
-            }
-            
-            // Create train button with initial color
-            var btn = document.createElement('button');
-            btn.className = 'train-btn';
-            btn.textContent = 'Train';
-            btn.style.backgroundColor = '#2ecc71'; // Initial green color
-            
-            // Store the link reference on the button
-            btn.dataset.deckLink = link.textContent.trim();
-            
-            // Add click handler that matches Anki's built-in pattern exactly
-            btn.onclick = function() {
-                // Change color to orange when clicked
-                this.style.backgroundColor = '#e67e22';
+            if ($row.find('.train-btn').length === 0) {
+                    // Create and append the train button
+                var $button = $('<button>')
+                    .addClass('train-btn')
+                    .text('Train')
+                    .css({
+                        'margin-left': '10px',
+                        'padding': '2px 8px',
+                        'background-color': '#2ecc71',
+                        'color': 'white',
+                        'border': 'none',
+                        'border-radius': '3px',
+                        'cursor': 'pointer'
+                })
+                .click(function(e) {
+                    e.stopPropagation();  // Prevent row click
+                    pycmd('train:' + deckId);
+                });
                 
-                // Escape the deck name for the search query
-                var deckName = this.dataset.deckLink.replace(/:/g, '\\:')
-                        .replace(/\s+/g, ' ')
-                        .trim();
-                
-                // Send the command with escaped name
-                pycmd('train:' + deckName);
-                
-                // Change color to blue while waiting for response
-                this.style.backgroundColor = '#3498db';
-                
-                // Return false to prevent default action
-                return false;
-            };
-            
-            // Add event listener for compatibility
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation();
-                
-                // Change color to purple when event listener is triggered
-                this.style.backgroundColor = '#9b59b6';
-                
-                // Call the onclick handler
-                var result = this.onclick();
-                
-                // Change color back to green if onclick returns true
-                if (result === true) {
-                    this.style.backgroundColor = '#2ecc71';
-                }
-                
-                return result;
-            });
-            
-            // Send debug info to Python side
-            pycmd('anki_exam_debug:Button properties: ' + JSON.stringify({
-                className: btn.className,
-                hasClickHandler: !!btn.onclick,
-                clickHandlerType: typeof btn.onclick,
-                hasEventListener: btn.closest('tr') ? 'using parent event listener' : 'no parent found',
-                eventListeners: btn.addEventListener ? 'supported' : 'not supported'
-            }));
-            
-            // Insert after the link
-            link.parentNode.insertBefore(btn, link.nextSibling);
-        });
-    })();
-    
-    // Save the HTML after injection
-    pycmd('anki_exam_save_html');
-    """
+            // Add the button after the deck name
+            $deckLink.after($button);
+        }
+    });
+}, 100);
+"""
     mw.deckBrowser.web.eval(js)
        
 
@@ -1439,14 +1408,12 @@ def handle_bridge_cmd(message):
     if isinstance(message, str):
         if message.startswith("anki_exam_debug:"):
             debug_msg = message.split(":", 1)[1]
-            #commenting out the anki_exam_debug... at least the debug messages are being sent...
-            #showInfo(f"DEBUG #{message_count}: {debug_msg}", parent=mw)
             return True
         elif message.startswith("train:"):
-            # Extract and unescape the deck name
-            deck_name = message.split(":", 1)[1].replace('\\:', ':')
-            showInfo(f"DEBUG #{message_count}: Training deck {deck_name}", parent=mw)
-            train_from_deck(deck_name)
+            # Extract deck ID
+            deck_id = message.split(":", 1)[1]
+            showInfo(f"DEBUG #{message_count}: Training deck ID {deck_id}", parent=mw)
+            train_from_deck(deck_id)
             return True
     return False
 

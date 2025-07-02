@@ -13,6 +13,23 @@ from .shared import require_access_key, questions_cycle
 from .AnkiExamCard import add_questions_to_deck
 
 
+def _show_error_message(message):
+    """Show error message in a thread-safe way"""
+    from aqt.utils import showInfo
+    showInfo(message)
+
+def _add_questions_to_deck_safe(deck_id, questions):
+    """Add questions to deck in a thread-safe way"""
+    try:
+        from .AnkiExamCard import add_questions_to_deck
+        questions_cycle["questions"] = questions
+        questions_cycle["index"] = 0
+        add_questions_to_deck(deck_id)
+        return True, f"Successfully added {len(questions)} questions to deck!"
+    except Exception as e:
+        import traceback
+        return False, f"Error adding questions to deck: {str(e)}\n\n{traceback.format_exc()}"
+
 
 
 def train_model_on_text(text_content):
@@ -53,6 +70,9 @@ def train_model_on_text(text_content):
     # Wait for the worker to finish
     loop.exec()
 
+
+
+
 def read_file_content(file_path: str) -> str:
     """Read content from either a TXT or PDF file."""
     if file_path.lower().endswith('.pdf'):
@@ -74,6 +94,9 @@ def read_file_content(file_path: str) -> str:
     else:  # Assume TXT file
         with open(file_path, "r", encoding="utf-8") as f:
             return f.read()
+
+
+
 
 def show_txt_training_gui():
     dlg = QDialog(mw)
