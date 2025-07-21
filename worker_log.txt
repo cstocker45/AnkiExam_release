@@ -1,0 +1,52 @@
+[2025-07-05 00:22:23.743] Starting QuestionWorker.__init__
+[2025-07-05 00:22:23.743] QuestionWorker initialized with text input length: 577
+[2025-07-05 00:23:55.412] Starting QuestionWorker.__init__
+[2025-07-05 00:23:55.413] QuestionWorker initialized with text input length: 577
+[2025-07-05 00:29:38.219] Starting QuestionWorker.__init__
+[2025-07-05 00:29:38.220] QuestionWorker initialized with text input length: 577
+[2025-07-05 00:31:05.682] Starting QuestionWorker.__init__
+[2025-07-05 00:31:05.683] QuestionWorker initialized with text input length: 577
+[2025-07-05 00:31:42.713] Starting QuestionWorker.__init__
+[2025-07-05 00:31:42.713] QuestionWorker initialized with text input length: 577
+[2025-07-05 00:32:08.681] Starting QuestionWorker.__init__
+[2025-07-05 00:32:08.681] QuestionWorker initialized with text input length: 577
+[2025-07-05 00:50:47.570] Starting QuestionWorker.__init__
+[2025-07-05 00:50:47.571] QuestionWorker initialized with text input length: 4254
+[2025-07-05 00:51:10.354] Starting QuestionWorker.__init__
+[2025-07-05 00:51:10.355] QuestionWorker initialized with text input length: 577
+[2025-07-05 00:52:49.787] Starting QuestionWorker.__init__
+[2025-07-05 00:52:49.787] QuestionWorker initialized with text input length: 641
+[2025-07-05 09:49:27.552] Starting QuestionWorker.__init__
+[2025-07-05 09:49:27.552] QuestionWorker initialized with text input length: 54010
+[2025-07-05 09:49:27.554] ==================================================
+[2025-07-05 09:49:27.554] STARTING QuestionWorker.run()
+[2025-07-05 09:49:27.555] ==================================================
+[2025-07-05 09:49:27.555] Thread name: Dummy-4
+[2025-07-05 09:49:27.556] STARTING QuestionWorker.run()
+[2025-07-05 09:49:27.556] Thread ID: 6220525568
+[2025-07-05 09:49:27.556] Thread name: Dummy-5
+[2025-07-05 09:49:27.556] Is main thread: False
+[2025-07-05 09:49:27.556] Thread ID: 6409629696
+[2025-07-05 09:49:27.556] Text input type: <class 'str'>, length: 54010
+[2025-07-05 09:49:27.556] Is main thread: False
+[2025-07-05 09:49:27.556] Uploaded content type: <class 'str'>, length: 54010
+[2025-07-05 09:49:27.556] Text input type: <class 'str'>, length: 54010
+[2025-07-05 09:49:27.556] Testing signal emission...
+[2025-07-05 09:49:27.556] Uploaded content type: <class 'str'>, length: 54010
+[2025-07-05 09:49:27.557] Testing signal emission...
+[2025-07-05 09:49:27.557] Successfully emitted test signal
+[2025-07-05 09:49:27.557] QCoreApplication instance: True
+[2025-07-05 09:49:27.557] Successfully emitted test signal
+[2025-07-05 09:49:27.558] Finished initial checks in run()
+[2025-07-05 09:49:27.558] QCoreApplication instance: True
+[2025-07-05 09:49:27.558] ==================================================
+[2025-07-05 09:49:27.558] Finished initial checks in run()
+[2025-07-05 09:49:27.558] Attempting to emit test signal...
+[2025-07-05 09:49:27.558] ==================================================
+[2025-07-05 09:49:27.558] Successfully emitted test signal
+[2025-07-05 09:49:27.558] Attempting to emit test signal...
+[2025-07-05 09:49:27.558] QApplication instance found: <aqt.AnkiApp object at 0x10e7a7160>
+[2025-07-05 09:49:27.559] Successfully emitted test signal
+[2025-07-05 09:49:27.559] Thread is running: True
+[2025-07-05 09:49:27.559] QApplication instance found: <aqt.AnkiApp object at 0x10e7a7160>
+[2025-07-05 09:49:27.559] Thread is running: True

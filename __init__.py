@@ -17,6 +17,7 @@ from datetime import datetime
 import time
 from .models import uploaded_txt_content, QuestionWorker
 from aqt import gui_hooks
+from .shared import require_access_key
 
 
 
@@ -33,6 +34,23 @@ from .shared import questions_cycle
 DEBUG = False
 #Integration of login box for authentication
 auth_client = ClientAuth.AuthClient()
+
+# Automatically attempt login with saved credentials on startup
+def auto_login_on_startup():
+    saved_creds = credential_manager.load_credentials()
+    if saved_creds:
+        username = saved_creds.get('username')
+        password = saved_creds.get('password')
+        access_key = saved_creds.get('access_key')
+        # Try to log in automatically
+        if auth_client.login(username, password):
+            print("Auto-login successful.")
+        else:
+            print("Auto-login failed.")
+    else:
+        print("No saved credentials for auto-login.")
+
+auto_login_on_startup()
 
 #Create the login box for authentication.
 def prompt_for_login():
@@ -639,6 +657,7 @@ def selection_window_gui():
                 font-size: 14px;
                 background-color: white;
                 margin: 10px;
+                color: #2d3436;
             }
         """)
         btn_layout.addWidget(num_questions_input)
@@ -662,6 +681,7 @@ def selection_window_gui():
                 font-size: 14px;
                 background-color: white;
                 margin: 10px;
+                color: #2d3436;
             }
         """)
         layout.addWidget(text_input)
@@ -709,205 +729,213 @@ def selection_window_gui():
                 uploaded_txt_content["content"] = content
                 showInfo("Deck content loaded successfully.")
         
+        
         def on_train():
             from .pdf_training import train_model_on_text
             train_btn.setEnabled(False)
             train_btn.setText("Generating...")
-            
+
             # Show loading indicator
             progress = QProgressBar()
             progress.setRange(0, 0)
             layout.addWidget(progress)
-            
+
             try:
                 train_model_on_text(text_input.toPlainText())
                 progress.hide()
                 train_btn.setEnabled(True)
                 train_btn.setText("Generate Questions")
-                create_question_content(content_area)
+                #create_question_content(content_area)
             except Exception as e:
                 progress.hide()
                 train_btn.setEnabled(True)
                 train_btn.setText("Generate Questions")
                 showInfo(f"Error: {str(e)}")
-        
+
+
         upload_btn.clicked.connect(on_upload)
         use_deck_btn.clicked.connect(on_use_deck)
         train_btn.clicked.connect(on_train)
 
-    def create_question_content(content_area):
-        # Clear existing content
-        for i in reversed(range(content_area.layout().count())): 
-            content_area.layout().itemAt(i).widget().setVisible(False)
-            content_area.layout().itemAt(i).widget().deleteLater()
-            
-        layout = content_area.layout()
-        
-        from .pdf_training import questions_cycle
-        questions = questions_cycle["questions"]
-        idx = questions_cycle["index"]
-        
-        if not questions or idx >= len(questions):
-            # Show no questions message
-            msg = QLabel("No questions available.\nPlease input training data first.")
-            msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            msg.setStyleSheet("""
-                font-size: 18px;
-                color: #2d3436;
-                margin: 20px;
-            """)
-            layout.addWidget(msg)
-            return
-            
-        question = questions[idx]
-        
-        # Add question label
-        question_label = QLabel("Please answer the following question:")
-        question_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        question_label.setStyleSheet("""
-            font-size: 18px;
-            color: #2d3436;
-            margin: 20px;
-        """)
-        layout.addWidget(question_label)
-        
-        # Add the actual question
-        question_text = QLabel(question)
-        question_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        question_text.setWordWrap(True)
-        question_text.setStyleSheet("""
-            font-size: 24px;
-            color: #2d3436;
-            margin: 20px;
-            font-weight: bold;
-        """)
-        layout.addWidget(question_text)
-        
-        # Add answer input
-        answer_input = QLineEdit()
-        answer_input.setPlaceholderText("Type your answer here...")
-        answer_input.setFixedHeight(40)
-        answer_input.setStyleSheet("""
-            QLineEdit {
-                border: 1px solid #dfe6e9;
-                border-radius: 4px;
-                padding: 10px;
-                font-size: 16px;
-                background-color: white;
-                margin: 20px;
-            }
-        """)
-        layout.addWidget(answer_input)
-        
-        # Add submit button
-        submit_btn = QPushButton("Submit Answer")
-        submit_btn.setFixedWidth(200)
-        submit_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                padding: 10px;
-                border-radius: 4px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-        """)
-        btn_container = QWidget()
-        btn_layout = QHBoxLayout()
-        btn_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        btn_layout.addWidget(submit_btn)
-        btn_container.setLayout(btn_layout)
-        layout.addWidget(btn_container)
-        
-        def on_submit():
-            if not answer_input.text().strip():
-                showInfo("Please enter an answer.")
-                return
-                
-            submit_btn.setEnabled(False)
-            submit_btn.setText("Checking...")
-            
-            # Show loading indicator
-            progress = QProgressBar()
-            progress.setRange(0, 0)
-            layout.addWidget(progress)
-            
-            # Create worker to handle answer checking
-            worker = AnswerWorker(answer_input.text(), question)
-            
-            def on_finished(output, total_tokens):
-                progress.hide()
-                
-                # Show result
-                result_label = QLabel(f"Feedback:\n{output}\n\nTokens used: {total_tokens}")
-                result_label.setWordWrap(True)
-                result_label.setStyleSheet("""
-                    font-size: 16px;
-                    color: #2d3436;
-                    margin: 20px;
-                    padding: 20px;
-                    background-color: #f8f9fa;
-                    border-radius: 4px;
-                """)
-                layout.addWidget(result_label)
-                
-                # Add next question button if available
-                questions_cycle["index"] += 1
-                if questions_cycle["index"] < len(questions_cycle["questions"]):
-                    next_btn = QPushButton("Next Question")
-                    next_btn.setFixedWidth(200)
-                    next_btn.setStyleSheet("""
-                        QPushButton {
-                            background-color: #4CAF50;
-                            color: white;
-                            border: none;
-                            padding: 10px;
-                            border-radius: 4px;
-                            font-weight: bold;
-                        }
-                        QPushButton:hover {
-                            background-color: #45a049;
-                        }
-                    """)
-                    next_btn.clicked.connect(lambda: create_question_content(content_area))
-                    
-                    btn_container = QWidget()
-                    btn_layout = QHBoxLayout()
-                    btn_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    btn_layout.addWidget(next_btn)
-                    btn_container.setLayout(btn_layout)
-                    layout.addWidget(btn_container)
-                else:
-                    done_label = QLabel("You have completed all questions!")
-                    done_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    done_label.setStyleSheet("""
-                        font-size: 18px;
-                        color: #2d3436;
-                        
-                        margin: 20px;
-                    """)
-                    layout.addWidget(done_label)
-            
-            def on_error(error_msg):
-                progress.hide()
-                submit_btn.setEnabled(True)
-                submit_btn.setText("Submit Answer")
-                showInfo(f"Error: {error_msg}")
-            
-            worker.finished.connect(on_finished)
-            worker.error.connect(on_error)
-            worker.start()
-        
-        submit_btn.clicked.connect(on_submit)
+
+
+    #Deprecated function which allows the user to review questions in the ankiexam app.
+   #def create_question_content(content_area):
+   #    # Clear existing content
+   #    for i in reversed(range(content_area.layout().count())): 
+   #        content_area.layout().itemAt(i).widget().setVisible(False)
+   #        content_area.layout().itemAt(i).widget().deleteLater()
+   #        
+   #    layout = content_area.layout()
+   #    
+   #    from .pdf_training import questions_cycle
+   #    questions = questions_cycle["questions"]
+   #    idx = questions_cycle["index"]
+   #    
+   #    if not questions or idx >= len(questions):
+   #        # Show no questions message
+   #        msg = QLabel("No questions available.\nPlease input training data first.")
+   #        msg.setAlignment(Qt.AlignmentFlag.AlignCenter)
+   #        msg.setStyleSheet("""
+   #            font-size: 18px;
+   #            color: #2d3436;
+   #            margin: 20px;
+   #        """)
+   #        layout.addWidget(msg)
+   #        return
+   #        
+   #    question = questions[idx]
+   #    
+   #    # Add question label
+   #    question_label = QLabel("Please answer the following question:")
+   #    question_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+   #    question_label.setStyleSheet("""
+   #        font-size: 18px;
+   #        color: #2d3436;
+   #        margin: 20px;
+   #    """)
+   #    layout.addWidget(question_label)
+   #    
+   #    # Add the actual question
+   #    question_text = QLabel(question)
+   #    question_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+   #    question_text.setWordWrap(True)
+   #    question_text.setStyleSheet("""
+   #        font-size: 24px;
+   #        color: #2d3436;
+   #        margin: 20px;
+   #        font-weight: bold;
+   #    """)
+   #    layout.addWidget(question_text)
+   #    
+   #    # Add answer input
+   #    answer_input = QLineEdit()
+   #    answer_input.setPlaceholderText("Type your answer here...")
+   #    answer_input.setFixedHeight(40)
+   #    answer_input.setStyleSheet("""
+   #        QLineEdit {
+   #            border: 1px solid #dfe6e9;
+   #            border-radius: 4px;
+   #            padding: 10px;
+   #            font-size: 16px;
+   #            background-color: white;
+   #            margin: 20px;
+   #        }
+   #    """)
+   #    layout.addWidget(answer_input)
+   #    
+   #    # Add submit button
+   #    submit_btn = QPushButton("Submit Answer")
+   #    submit_btn.setFixedWidth(200)
+   #    submit_btn.setStyleSheet("""
+   #        QPushButton {
+   #            background-color: #4CAF50;
+   #            color: white;
+   #            border: none;
+   #            padding: 10px;
+   #            border-radius: 4px;
+   #            font-weight: bold;
+   #        }
+   #        QPushButton:hover {
+   #            background-color: #45a049;
+   #        }
+   #    """)
+   #    btn_container = QWidget()
+   #    btn_layout = QHBoxLayout()
+   #    btn_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+   #    btn_layout.addWidget(submit_btn)
+   #    btn_container.setLayout(btn_layout)
+   #    layout.addWidget(btn_container)
+   #    
+   #    def on_submit():
+   #        if not answer_input.text().strip():
+   #            showInfo("Please enter an answer.")
+   #            return
+   #            
+   #        submit_btn.setEnabled(False)
+   #        submit_btn.setText("Checking...")
+   #        
+   #        # Show loading indicator
+   #        progress = QProgressBar()
+   #        progress.setRange(0, 0)
+   #        layout.addWidget(progress)
+   #        
+   #        # Create worker to handle answer checking
+   #        worker = AnswerWorker(answer_input.text(), question)
+   #        
+   #        def on_finished(output, total_tokens):
+   #            progress.hide()
+   #            
+   #            # Show result
+   #            result_label = QLabel(f"Feedback:\n{output}\n\nTokens used: {total_tokens}")
+   #            result_label.setWordWrap(True)
+   #            result_label.setStyleSheet("""
+   #                font-size: 16px;
+   #                color: #2d3436;
+   #                margin: 20px;
+   #                padding: 20px;
+   #                background-color: #f8f9fa;
+   #                border-radius: 4px;
+   #            """)
+   #            layout.addWidget(result_label)
+   #            
+   #            # Add next question button if available
+   #            questions_cycle["index"] += 1
+   #            if questions_cycle["index"] < len(questions_cycle["questions"]):
+   #                next_btn = QPushButton("Next Question")
+   #                next_btn.setFixedWidth(200)
+   #                next_btn.setStyleSheet("""
+   #                    QPushButton {
+   #                        background-color: #4CAF50;
+   #                        color: white;
+   #                        border: none;
+   #                        padding: 10px;
+   #                        border-radius: 4px;
+   #                        font-weight: bold;
+   #                    }
+   #                    QPushButton:hover {
+   #                        background-color: #45a049;
+   #                    }
+   #                """)
+   #                next_btn.clicked.connect(lambda: create_question_content(content_area))
+   #                
+   #                btn_container = QWidget()
+   #                btn_layout = QHBoxLayout()
+   #                btn_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+   #                btn_layout.addWidget(next_btn)
+   #                btn_container.setLayout(btn_layout)
+   #                layout.addWidget(btn_container)
+   #            else:
+   #                done_label = QLabel("You have completed all questions!")
+   #                done_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+   #                done_label.setStyleSheet("""
+   #                    font-size: 18px;
+   #                    color: #2d3436;
+   #                    
+   #                    margin: 20px;
+   #                """)
+   #                layout.addWidget(done_label)
+   #        
+   #        def on_error(error_msg):
+   #            progress.hide()
+   #            submit_btn.setEnabled(True)
+   #            submit_btn.setText("Submit Answer")
+   #            showInfo(f"Error: {error_msg}")
+   #        
+   #        worker.finished.connect(on_finished)
+   #        worker.error.connect(on_error)
+   #        worker.start()
+   #    
+   #    submit_btn.clicked.connect(on_submit)
 
     def on_training():
         create_training_content(content_area)
 
-    def on_question():
-        create_question_content(content_area)
+   # def on_question():
+   #     create_question_content(content_area)
+
+    def open_settings():
+        showInfo("Settings are not implemented yet. This is a placeholder function.")
 
     # Connect buttons to their functions
     login_btn.clicked.connect(do_login)
@@ -923,7 +951,7 @@ def selection_window_gui():
     question_btn = create_sidebar_button(
         "question.png",
         "Input Question",
-        on_question
+        open_settings
     )
     
     logout_btn = create_sidebar_button(
@@ -1001,7 +1029,7 @@ def selection_window_gui():
     content_layout.addWidget(welcome_label)
 
 
-    # Try auto-login if we have saved credentials
+    # Set login form state based on credentials already loaded at startup
     saved_creds = credential_manager.load_credentials()
     if saved_creds:
         user_input.setText(saved_creds['username'])
@@ -1009,13 +1037,11 @@ def selection_window_gui():
         remember_checkbox.setChecked(True)
         login_form.hide()
         tools_section.show()
-        # Set initial sidebar width based on login state
         sidebar.setFixedWidth(60)
         sidebar_layout.setContentsMargins(1, 20, 1, 20)
     else:
         tools_section.hide()
         login_form.show()
-        # Set initial sidebar width based on login state
         sidebar.setFixedWidth(200)
         sidebar_layout.setContentsMargins(10, 20, 10, 20)
 
@@ -1265,6 +1291,7 @@ def extract_deck_content(deck_name=None):
 #02.07.2025 for some reason decks with spaces are not being detected but those with no spaces are okay...
 #this is an issue with the way these spaceare being stored in anki's backend.
 
+@require_access_key
 def train_from_deck(deck_id):
     """Train on cards from a specific deck by ID."""
     if not mw.col:
@@ -1315,6 +1342,7 @@ def train_from_deck(deck_id):
     content_length = len(combined_content) if combined_content else 0
     showInfo(f"Content length before training: {content_length} characters")
     
+  
     try:
         # Save content to file
         addon_dir = os.path.dirname(__file__)
@@ -1451,7 +1479,5 @@ def handle_webview_message(handled, message, context):
 gui_hooks.deck_browser_did_render.append(inject_train_buttons)
 
 # Uncomment the webview message handler
-showInfo("Registering webview message handler", parent=mw)
+#showInfo("Registering webview message handler", parent=mw)
 gui_hooks.webview_did_receive_js_message.append(handle_webview_message)
-
-
