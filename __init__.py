@@ -5,7 +5,7 @@ from anki.notes import Note
 from . import AnkiExamCard
 from .pdf_training import read_file_content
 from .shared import credential_manager, questions_cycle
-from . import ClientAuth
+from .ClientAuth import AuthClient
 from PyQt6.QtCore import QThread, pyqtSignal, QPropertyAnimation, QEasingCurve, QEvent, QObject, QTimer
 from PyQt6.QtGui import QIcon, QScreen, QColor
 from PyQt6.QtWidgets import QGraphicsDropShadowEffect
@@ -19,11 +19,11 @@ from .models import uploaded_txt_content, QuestionWorker
 from aqt import gui_hooks
 from .shared import require_access_key
 
+# Create a single AuthClient instance to be used throughout the addon
+auth_client = AuthClient()
+import platform
 
 
-
-#Main selection window to all for various AnkiExam tools
-# ...existing imports...
 
 #initialize uploaded pdf content
 uploaded_txt_content = {"content": ""}
@@ -31,9 +31,37 @@ uploaded_txt_content = {"content": ""}
 # Import questions_cycle from shared instead of redefining it
 from .shared import questions_cycle
 
+# Initialize status bar with token display
+from . import status_bar
+
 DEBUG = False
 #Integration of login box for authentication
 auth_client = ClientAuth.AuthClient()
+
+# Persistent device UUID logic (store in hidden OS-specific config dir)
+def get_device_id_path():
+    if platform.system() == "Windows":
+        base = os.getenv("APPDATA") or os.getenv("LOCALAPPDATA")
+        if not base:
+            base = os.path.expanduser("~")
+        dir_path = os.path.join(base, "AnkiExam")
+    elif platform.system() == "Darwin":
+        dir_path = os.path.expanduser("~/Library/Application Support/AnkiExam")
+    else:
+        dir_path = os.path.expanduser("~/.config/AnkiExam")
+    os.makedirs(dir_path, exist_ok=True)
+    return os.path.join(dir_path, ".device_id")
+
+def get_or_create_device_id():
+    path = get_device_id_path()
+    if os.path.exists(path):
+        with open(path, "r") as f:
+            return f.read().strip()
+    device_id = str(uuid.uuid4())
+    with open(path, "w") as f:
+        f.write(device_id)
+    return device_id
+DEVICE_ID = get_or_create_device_id()
 
 # Automatically attempt login with saved credentials on startup
 def auto_login_on_startup():
@@ -41,81 +69,16 @@ def auto_login_on_startup():
     if saved_creds:
         username = saved_creds.get('username')
         password = saved_creds.get('password')
-        access_key = saved_creds.get('access_key')
-        # Try to log in automatically
         if auth_client.login(username, password):
-            print("Auto-login successful.")
+            print("Auto-login successful")
         else:
-            print("Auto-login failed.")
+            print("Auto-login failed")
     else:
-        print("No saved credentials for auto-login.")
+        print("No saved credentials found")
 
 auto_login_on_startup()
 
-#Create the login box for authentication.
-def prompt_for_login():
-    dlg = QDialog(mw)
-    dlg.setWindowTitle("Login to AnkiExam Server")
-    layout = QVBoxLayout()
-    user_label = QLabel("Username:")
-    user_input = QLineEdit()
-    pass_label = QLabel("Password:")
-    pass_input = QLineEdit()
-    pass_input.setEchoMode(QLineEdit.EchoMode.Password)
-    email_label = QLabel("Email:")
-    email_input = QLineEdit()
-    # Get MAC address automatically
-    mac_address = ':'.join(['{:02x}'.format((uuid.getnode() >> ele) & 0xff) for ele in range(0,8*6,8)][::-1])
 
-    login_btn = QPushButton("Login")
-    register_btn = QPushButton("Register")
-    status_label = QLabel("")
-    layout.addWidget(user_label)
-    layout.addWidget(user_input)
-    layout.addWidget(pass_label)
-    layout.addWidget(pass_input)
-    layout.addWidget(email_label)
-    layout.addWidget(email_input)
-    layout.addWidget(login_btn)
-    layout.addWidget(register_btn)
-    layout.addWidget(status_label)
-    dlg.setLayout(layout)
-    dlg.setMinimumWidth(300)
-
-    def do_login():
-        username = user_input.text().strip()
-        password = pass_input.text().strip()
-        if not username or not password:
-            status_label.setText("Please enter both username and password.")
-            status_label.setStyleSheet("color: red;")
-            return
-        if auth_client.login(username, password):
-            dlg.accept()
-        else:
-            status_label.setText("Login failed. Try again.")
-
-    login_btn.clicked.connect(do_login)
-
-    def do_register():
-        username = user_input.text().strip()
-        password = pass_input.text().strip()
-        email = email_input.text().strip()
-        if not username or not password or not email:
-            status_label.setText("Please enter username, password, and email.")
-            status_label.setStyleSheet("color: red;")
-            return
-        success, msg = auth_client.register(username, password, email, mac_address)
-        status_label.setText(str(msg))
-        if success:
-            status_label.setStyleSheet("color: green;")
-            verify_dlg = show_verification_dialog(username)
-            if verify_dlg:  # If verification was successful
-                do_login()  # Attempt to log in automatically
-        else:
-            status_label.setStyleSheet("color: red;")
-
-    register_btn.clicked.connect(do_register)
-    dlg.exec()
 
 def show_verification_dialog(username):
     verify_dlg = QDialog(mw)
@@ -165,6 +128,9 @@ def show_verification_dialog(username):
     verify_btn.clicked.connect(do_verify)
     return verify_dlg.exec()
 
+# Import token history manager
+from .token_history import token_history
+
 #Worker thread to handle question generation
 class AnswerWorker(QThread):
     finished = pyqtSignal(str, int)
@@ -173,8 +139,28 @@ class AnswerWorker(QThread):
         super().__init__()
         self.user_answer = user_answer
         self.question = question
+        
     def run(self):
         try:
+            # Call the API for answer checking
+            from .main import together_api_input
+            output, total_tokens = together_api_input(self.user_answer, self.question)
+            print(f"API returned total_tokens: {total_tokens}")  # Debug logging
+
+            # Track token usage
+            if total_tokens > 0:
+                # Use the auth_client from parent module
+                if auth_client and auth_client.is_authenticated():
+                    success = auth_client.add_tokens(total_tokens)
+                    print(f"Token update success: {success}")  # Debug logging
+                else:
+                    print("Warning: auth_client not available or not authenticated")
+                    
+            # Emit the results
+            self.finished.emit(output, total_tokens)
+        except Exception as e:
+            print(f"Error in AnswerWorker: {str(e)}")  # Debug logging
+            self.error.emit(str(e))
             from .main import together_api_input
             output, total_tokens = together_api_input(self.user_answer, self.question)
             self.finished.emit(output, total_tokens)
@@ -204,6 +190,44 @@ def get_icon_path(icon_name):
 
 #Main selection window to all for various AnkiExam tools
 def selection_window_gui():
+    # Login form fields (define once and use everywhere)
+    user_input = QLineEdit()
+    user_input.setPlaceholderText("Username")
+    pass_input = QLineEdit()
+    pass_input.setPlaceholderText("Password")
+    pass_input.setEchoMode(QLineEdit.EchoMode.Password)
+    email_input = QLineEdit()
+    email_input.setPlaceholderText("Email (for registration)")
+    remember_checkbox = QCheckBox("Remember me")
+
+    def do_login():
+        username = user_input.text().strip()
+        password = pass_input.text().strip()
+        #showInfo(password)
+        if not username or not password:
+            status_label.setText("Please enter both username and password.")
+            return
+        # Debug: print password length for troubleshooting
+        print(f"Login attempt: username='{username}', password length={len(password)}")
+        if auth_client.login(username, password):
+            if remember_checkbox.isChecked():
+                credential_manager.save_credentials(
+                    username, 
+                    password,
+                    auth_client.get_access_key()
+                )
+            else:
+                credential_manager.clear_credentials()
+            login_form.hide()
+            tools_section.show()
+            # Shrink sidebar for tool icons
+            sidebar.setFixedWidth(60)  # Smaller width for icons with padding
+            sidebar_layout.setContentsMargins(1, 20, 1, 20)  # Adjust margins
+        else:
+            status_label.setText("Login failed. Try again.")
+
+    # Support pressing Enter in password field to trigger login
+    pass_input.returnPressed.connect(do_login)
     # Get the primary screen and set default dimensions
     window_width = 1024  # Default width
     window_height = 768  # Default height
@@ -215,7 +239,13 @@ def selection_window_gui():
         window_width = int(screen_geometry.width() * 0.7)
         window_height = int(screen_geometry.height() * 0.7)
 
-    dlg = QDialog(mw)
+    class PersistentDialog(QDialog):
+        def closeEvent(self, event):
+            # Only hide the dialog, don't destroy it
+            event.ignore()
+            self.hide()
+
+    dlg = PersistentDialog(mw)
     dlg.setWindowTitle("AnkiExam Tool")
     dlg.setFixedSize(window_width, window_height)
     
@@ -241,6 +271,7 @@ def selection_window_gui():
         }
         QPushButton:hover {
             background-color: #34495e;
+            border: 0px solid #FFFF00;  /* Yellow border */
         }
         QToolTip {
             background-color: #2c3e50;
@@ -254,11 +285,11 @@ def selection_window_gui():
             border-radius: 4px;
             background-color: #34495e;
             color: white;
-            border: 1px solid #455d7a;
+            border: 0px solid #455d7a;
             width: 180px;  /* Fixed width for input fields */
         }
         QLineEdit:focus {
-            border: 1px solid #74b9ff;
+            border: 0px solid #74b9ff;
         }
         QLabel {
             color: white;
@@ -281,16 +312,6 @@ def selection_window_gui():
     login_form = QWidget()
     login_form_layout = QVBoxLayout()
     login_form.setLayout(login_form_layout)
-
-    # Login form fields
-    user_input = QLineEdit()
-    user_input.setPlaceholderText("Username")
-    pass_input = QLineEdit()
-    pass_input.setPlaceholderText("Password")
-    pass_input.setEchoMode(QLineEdit.EchoMode.Password)
-    email_input = QLineEdit()
-    email_input.setPlaceholderText("Email (for registration)")
-    remember_checkbox = QCheckBox("Remember me")
 
     login_form_layout.addWidget(QLabel("Login"))
     login_form_layout.addWidget(user_input)
@@ -349,6 +370,7 @@ def selection_window_gui():
             QWidget {
                 background-color: transparent;  /* Start transparent */
                 border-radius: 0px;
+                border: 0px solid #FFFF00;  /* Yellow border */
             }
         """)
         tooltip_box.hide()
@@ -371,7 +393,7 @@ def selection_window_gui():
         
         # Create a background widget for the layout
         layout_bg = QWidget(inner_box)
-        layout_bg.setStyleSheet("background-color: #34495e; border: none;")  # Bright green
+        layout_bg.setStyleSheet("background-color: #34495e; border: none; border: 0px solid #FFFF00;")  # Bright green
         inner_layout.addWidget(layout_bg)
         
         # Create tooltip label inside the box
@@ -413,6 +435,7 @@ def selection_window_gui():
         anim.setDuration(300)  # 300ms animation
         
         def on_hover_enter():
+
             # Stop any running animations
             anim.stop()
             
@@ -497,9 +520,11 @@ def selection_window_gui():
             QWidget {
                 background-color: transparent;
                 border: none;
+                border-radius: 0px;
             }
             QPushButton {
                 border: none;
+                border-radius: 0px;
                 background-color: transparent;
                 padding: 10px;
             }
@@ -511,28 +536,7 @@ def selection_window_gui():
         
         return container
 
-    def do_login():
-        username = user_input.text().strip()
-        password = pass_input.text().strip()
-        if not username or not password:
-            status_label.setText("Please enter both username and password.")
-            return
-        if auth_client.login(username, password):
-            if remember_checkbox.isChecked():
-                credential_manager.save_credentials(
-                    username, 
-                    password,
-                    auth_client.get_access_key()
-                )
-            else:
-                credential_manager.clear_credentials()
-            login_form.hide()
-            tools_section.show()
-            # Shrink sidebar for tool icons
-            sidebar.setFixedWidth(60)  # Smaller width for icons with padding
-            sidebar_layout.setContentsMargins(1, 20, 1, 20)  # Adjust margins
-        else:
-            status_label.setText("Login failed. Try again.")
+
 
     def do_register():
         username = user_input.text().strip()
@@ -541,9 +545,8 @@ def selection_window_gui():
         if not username or not password or not email:
             status_label.setText("Please enter username, password, and email.")
             return
-        # Get MAC address automatically
-        mac_address = ':'.join(['{:02x}'.format((uuid.getnode() >> ele) & 0xff) for ele in range(0,8*6,8)][::-1])
-        success, msg = auth_client.register(username, password, email, mac_address)
+        device_id = DEVICE_ID
+        success, msg = auth_client.register(username, password, email, device_id)
         status_label.setText(str(msg))
         if success:
             status_label.setStyleSheet("color: #51cf66;")  # Green for success
@@ -565,6 +568,8 @@ def selection_window_gui():
         # Restore sidebar width for login form
         sidebar.setFixedWidth(200)
         sidebar_layout.setContentsMargins(10, 20, 10, 20)
+        # Close the dialog when explicitly logging out
+        dlg.accept()
 
     def create_training_content(content_area):
         # Clear existing content
@@ -942,27 +947,174 @@ def selection_window_gui():
     register_btn.clicked.connect(do_register)
 
     # Create tool buttons
+    def show_welcome():
+        # Remove all widgets from content_layout
+        for i in reversed(range(content_layout.count())):
+            widget = content_layout.itemAt(i).widget()
+            if widget is not None:
+                widget.setParent(None)
+        # Add welcome label
+        welcome_label = QLabel("Welcome to AnkiExam Tool!")
+        welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        welcome_label.setStyleSheet("font-size: 24px; color: #2d3436; margin: 20px; font-weight: bold;")
+        content_layout.addWidget(welcome_label)
+
+    home_btn = create_sidebar_button(
+        "AnkiExam_Home.png",
+        "Home",
+        show_welcome
+    )
+
     training_btn = create_sidebar_button(
         "book.png",
         "Input Training Data",
         on_training
     )
-    
+
     question_btn = create_sidebar_button(
         "question.png",
         "Input Question",
         open_settings
     )
-    
+
+    def on_stats():
+        # Clear existing content
+        for i in reversed(range(content_area.layout().count())): 
+            content_area.layout().itemAt(i).widget().setVisible(False)
+            content_area.layout().itemAt(i).widget().deleteLater()
+            
+        layout = content_area.layout()
+        
+        # Add title
+        title = QLabel("Token Usage Statistics")
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title.setStyleSheet("""
+            font-size: 24px;
+            color: #2d3436;
+            margin: 20px;
+            font-weight: bold;
+        """)
+        layout.addWidget(title)
+        
+        # Function to update the display with token usage
+        def update_display(token_usage):
+            # Add token usage display
+            token_label = QLabel(f"Total Tokens Used: {token_usage:,}")
+            token_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            token_label.setStyleSheet("""
+                font-size: 36px;
+                color: #2d3436;
+                margin: 40px;
+                padding: 20px;
+                background-color: #f1f2f6;
+                border-radius: 10px;
+            """)
+            layout.addWidget(token_label)
+
+            # Add explanation
+            explanation = QLabel(
+                "Token usage is tracked for all your interactions with the AI model, including:\n"
+                "• Question generation from training data\n"
+                "• Answer evaluation and feedback\n\n"
+                "Each token represents a piece of text processed by the AI model."
+            )
+            explanation.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            explanation.setWordWrap(True)
+            explanation.setStyleSheet("""
+                font-size: 16px;
+                color: #2d3436;
+                margin: 20px;
+            """)
+            layout.addWidget(explanation)
+
+            # Add refresh button
+            refresh_btn = QPushButton("Refresh Token Count")
+            refresh_btn.setFixedWidth(200)
+            refresh_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    padding: 10px;
+                    border-radius: 4px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #45a049;
+                }
+            """)
+            btn_container = QWidget()
+            btn_layout = QHBoxLayout()
+            btn_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            btn_layout.addWidget(refresh_btn)
+            btn_container.setLayout(btn_layout)
+            layout.addWidget(btn_container)
+
+            refresh_btn.clicked.connect(on_stats)  # Clicking refresh will reload the stats
+
+        # Create token label first
+        token_label = QLabel()
+        token_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        token_label.setStyleSheet("""
+            font-size: 24px;
+            margin: 40px;
+            padding: 20px;
+            background-color: #f1f2f6;
+            border-radius: 10px;
+        """)
+        
+        # Get initial token usage
+        try:
+            token_usage = auth_client.get_token_usage()
+            update_display(token_usage)
+        except Exception as e:
+            token_label.setText("Could not retrieve token usage. Please try again later.")
+            token_label.setStyleSheet(token_label.styleSheet() + "\ncolor: #e74c3c;")
+            layout.addWidget(token_label)
+
+            # Add retry button
+            retry_btn = QPushButton("Retry")
+            retry_btn.setFixedWidth(200)
+            retry_btn.setStyleSheet("""
+                QPushButton {
+                    background-color: #4CAF50;
+                    color: white;
+                    border: none;
+                    padding: 10px;
+                    border-radius: 4px;
+                    font-weight: bold;
+                }
+                QPushButton:hover {
+                    background-color: #45a049;
+                }
+            """)
+            btn_container = QWidget()
+            btn_layout = QHBoxLayout()
+            btn_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            btn_layout.addWidget(retry_btn)
+            btn_container.setLayout(btn_layout)
+            layout.addWidget(btn_container)
+
+            retry_btn.clicked.connect(on_stats)  # Clicking retry will reload the stats
+
+
+    stats_btn = create_sidebar_button(
+        "Stat_image.png",
+        "Show Usage",
+        on_stats
+    )
+
     logout_btn = create_sidebar_button(
         "logout.png",
         "Logout",
         do_logout
     )
 
-    # Add buttons to tools section
+    # Add buttons to tools section (home first)
+    tools_layout.addWidget(home_btn)
     tools_layout.addWidget(training_btn)
     tools_layout.addWidget(question_btn)
+    tools_layout.addWidget(stats_btn)
     tools_layout.addStretch()  # Push logout to bottom
     tools_layout.addWidget(logout_btn)
 
@@ -1017,16 +1169,8 @@ def selection_window_gui():
     # Add scroll area to main layout instead of content area directly
     main_layout.addWidget(scroll)
 
-    # Welcome message in content area
-    welcome_label = QLabel("Welcome to AnkiExam Tool!")
-    welcome_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-    welcome_label.setStyleSheet("""
-        font-size: 24px;
-        color: #2d3436;
-        margin: 20px;
-        font-weight: bold;
-    """)
-    content_layout.addWidget(welcome_label)
+    # Welcome message in content area (initial)
+    show_welcome()
 
 
     # Set login form state based on credentials already loaded at startup
@@ -1354,10 +1498,42 @@ def train_from_deck(deck_id):
         showInfo(f"Saved deck content to {content_file}")
         
         # Start training on this content
-        showInfo("Starting training process...")
-        from .pdf_training import train_model_on_text
-        train_model_on_text(combined_content)
-        showInfo("Training process completed")
+        # Debug authentication state
+        if not auth_client.is_authenticated():
+            showInfo("Error: Not authenticated. Please log in again.")
+            return
+
+        try:
+            # Get token usage before training
+            usage_before = auth_client.get_token_usage()
+            print(f"Token usage before training: {usage_before}")  # Debug logging
+            
+            showInfo("Starting training process...")
+            from .pdf_training import train_model_on_text
+            train_model_on_text(combined_content)
+            
+            # Wait a moment for token usage to update on server
+            time.sleep(3)  # Increased wait time to ensure server update
+            
+            # Get updated token usage
+            current_usage = auth_client.get_token_usage()
+            print(f"Token usage after training: {current_usage}")  # Debug logging
+            
+            # Calculate tokens used
+            tokens_used = current_usage - usage_before
+            print(f"Calculated tokens used: {tokens_used}")  # Debug logging
+            
+            if tokens_used <= 0:
+                # If no tokens were counted, try getting the usage again
+                time.sleep(2)
+                current_usage = auth_client.get_token_usage()
+                tokens_used = current_usage - usage_before
+            
+            # Show token usage information
+            showInfo(f"Training completed!\n\nTokens used in this session: {tokens_used:,}\nTotal token usage: {current_usage:,}")
+            
+        except Exception as token_error:
+            showInfo(f"Error getting token usage: {str(token_error)}")
         
     except Exception as e:
         showInfo(f"Error in train_from_deck: {str(e)}")

@@ -36,7 +36,14 @@ def train_model_on_text(text_content):
     """
     Train the model on the provided text content.
     This function is called from both the GUI and programmatically.
+    Returns the number of tokens used.
     """
+    from .ClientAuth import AuthClient
+    auth_client = AuthClient()
+    
+    # Get initial token usage
+    initial_tokens = auth_client.get_token_usage()
+    
     # Store the text content in the global variable
     uploaded_txt_content["content"] = text_content
     

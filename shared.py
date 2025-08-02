@@ -28,9 +28,9 @@ class CredentialManager:
             
             # Use a constant salt (not ideal but acceptable for this use case)
             salt = b'AnkiExamSalt'
-            # Use the machine's MAC address as a unique key
-            import uuid
-            device_id = str(uuid.getnode()).encode()
+            # Use the machine's stable MAC address as a unique key
+            from .utils import get_stable_mac_address
+            device_id = get_stable_mac_address().encode()
             
             kdf = PBKDF2HMAC(
                 algorithm=hashes.SHA256(),

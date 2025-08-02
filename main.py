@@ -46,6 +46,27 @@ def together_api_input(UserAnswer, QuestionToAsk):
 
     response = requests.post(url, headers=headers, json=data)
     response.raise_for_status()
-    output = response.json()["choices"][0]["message"]["content"]
-    total_tokens = response.json()["usage"]["total_tokens"]
+    result = response.json()
+    output = result["choices"][0]["message"]["content"]
+    total_tokens = result.get("usage", {}).get("total_tokens", 0)
+    print(f"API returned total_tokens: {total_tokens}")  # Debug logging
+    
+    # Update token count in auth client
+    if total_tokens > 0:
+        from . import auth_client
+        if auth_client and auth_client.is_authenticated():
+            success = auth_client.add_tokens(total_tokens)
+            print(f"Token update success: {success}")  # Debug logging
+        else:
+            print("Warning: auth_client not available or not authenticated")
+    total_tokens = result["usage"]["total_tokens"]
+    
+    # Track token usage
+    from .ClientAuth import AuthClient
+    auth_client = AuthClient()
+    if total_tokens > 0:
+        auth_client.add_tokens(total_tokens)
+
+
+        
     return output, total_tokens

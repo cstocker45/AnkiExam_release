@@ -63,11 +63,26 @@ class QuestionWorker(QThread):
 
                 response = requests.post(url, headers=headers, json=data)
                 response.raise_for_status()
-                questions_text = response.json()["choices"][0]["message"]["content"]
+                result = response.json()
+                questions_text = result["choices"][0]["message"]["content"]
+                
+                # Calculate and track token usage
+                total_tokens = result.get("usage", {}).get("total_tokens", 0)
+                print(f"API returned total_tokens: {total_tokens}")  # Debug logging
+                
+                if total_tokens > 0:
+                    # Use the auth_client from the parent module
+                    from . import auth_client
+                    if auth_client and auth_client.is_authenticated():
+                        success = auth_client.add_tokens(total_tokens)
+                        print(f"Token update success: {success}")  # Debug logging
+                    else:
+                        print("Warning: auth_client not available or not authenticated")
 
                 questions = re.findall(r"\d+\.\s.*?(?=(?:\n\d+\.|\Z))", questions_text, re.DOTALL)
                 questions = [q.strip().replace("  ", " ") for q in questions]
 
+                # Pass both questions and token count
                 self.finished.emit(questions_text, questions)
         except Exception as e:
             self.error.emit(str(e))
