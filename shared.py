@@ -10,8 +10,58 @@ questions_cycle = {
     "index": 0
 }
 
-# Global variable for user access key
+# Global variables
 user_access_key = None
+model_name = "deepseek-ai/DeepSeek-V3"  # default model
+train_button_enabled = False  # default is disabled
+
+def set_model_name(name):
+    global model_name
+    model_name = name
+    # Persist immediately so the selection survives restarts
+    save_settings()
+
+def get_model_name():
+    return model_name
+
+def set_train_button_enabled(enabled):
+    global train_button_enabled
+    train_button_enabled = enabled
+    # Save the setting to disk
+    save_settings()
+
+def get_train_button_enabled():
+    return train_button_enabled
+
+def save_settings():
+    """Save settings to a JSON file"""
+    settings = {
+        'model_name': model_name,
+        'train_button_enabled': train_button_enabled
+    }
+    settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings.json')
+    with open(settings_path, 'w') as f:
+        json.dump(settings, f)
+
+def load_settings():
+    """Load settings from JSON file"""
+    global model_name, train_button_enabled
+    settings_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings.json')
+    try:
+        with open(settings_path, 'r') as f:
+            settings = json.load(f)
+            model_name = settings.get('model_name', model_name)
+            train_button_enabled = settings.get('train_button_enabled', train_button_enabled)
+    except (FileNotFoundError, json.JSONDecodeError):
+        # If file doesn't exist or is invalid, use defaults
+        pass
+
+# Load settings at module import
+load_settings()
+
+def update_model(name):
+    """Update the model name in the global configuration"""
+    set_model_name(name)
 
 class CredentialManager:
     def __init__(self):

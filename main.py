@@ -2,6 +2,7 @@
 
 import os
 import requests
+from .shared import get_model_name
 
 print(f"Running Script...")
    # Run in the terminal:
@@ -21,7 +22,7 @@ def together_api_input(UserAnswer, QuestionToAsk):
         "Content-Type": "application/json"
     }
     data = {
-        "model": "deepseek-ai/DeepSeek-V3",
+        "model": get_model_name(),  # Using the imported get_model_name function
         "messages": [
             {
                 "role": "system",

@@ -90,13 +90,11 @@ class AuthClient:
             headers = {"Authorization": f"Bearer {self.token}"}
             r = requests.get(url, headers=headers)
             if r.status_code == 200:
-                return r.json()["token_usage"]
+                data = r.json()
+                return data["token_usage"]
             else:
                 print("Failed to get token usage:", r.text)
                 return 0
-        except Exception as e:
-            print("Error getting token usage:", e)
-            return 0
         except Exception as e:
             print(f"Error getting token usage: {str(e)}")
             return 0
@@ -109,6 +107,58 @@ class AuthClient:
         headers = {"Authorization": f"Bearer {self.token}"}
         r = requests.get(url, headers=headers)
         return r.json()
+        
+    def update_balance(self, amount):
+        """Update the user's token balance"""
+        if not self.is_authenticated():
+            print("Not authenticated.")
+            return False
+            
+        url = f"{SERVER_URL}/api/update_balance"
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/x-www-form-urlencoded"
+            }
+            data = {
+                "username": self.username,
+                "amount": str(amount)
+            }
+            r = requests.post(url, data=data, headers=headers)
+            if r.status_code == 200:
+                return True
+            else:
+                print(f"Failed to update balance. Status code: {r.status_code}, Response: {r.text}")
+                return False
+        except Exception as e:
+            print(f"Error updating balance: {str(e)}")
+            return False
+            
+    def purchase_tokens(self, amount):
+        """Purchase tokens using the user's balance"""
+        if not self.is_authenticated():
+            print("Not authenticated.")
+            return False
+            
+        url = f"{SERVER_URL}/api/purchase_tokens"
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/x-www-form-urlencoded"
+            }
+            data = {
+                "username": self.username,
+                "amount": str(amount)
+            }
+            r = requests.post(url, data=data, headers=headers)
+            if r.status_code == 200:
+                return True
+            else:
+                print(f"Failed to purchase tokens. Status code: {r.status_code}, Response: {r.text}")
+                return False
+        except Exception as e:
+            print(f"Error purchasing tokens: {str(e)}")
+            return False
 
     def register(self, username, password, email, device_id):
         url = f"{SERVER_URL}/register_request"

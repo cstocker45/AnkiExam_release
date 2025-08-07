@@ -4,7 +4,7 @@ import requests
 import re
 import json
 from aqt.utils import showInfo
-from .shared import require_access_key, user_access_key, questions_cycle
+from .shared import require_access_key, user_access_key, questions_cycle, get_model_name
 
 # Global variables
 uploaded_txt_content = {"content": ""}
@@ -41,7 +41,7 @@ class QuestionWorker(QThread):
                     "Content-Type": "application/json"
                 }
                 data = {
-                    "model": "deepseek-ai/DeepSeek-V3",
+                    "model": get_model_name(),  # Using the imported get_model_name function
                     "messages": [
                         {
                             "role": "system",

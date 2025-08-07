@@ -1,0 +1,7 @@
+2025-07-05 00:09:00.252849 - Error in train_from_deck:
+train_model_on_text() takes 1 positional argument but 2 were given
+Traceback (most recent call last):
+  File "/Users/colestocker/Library/Application Support/Anki2/addons21/AnkiExam_Addon/__init__.py", line 1346, in run_training
+    train_model_on_text(combined_content, combined_content)
+TypeError: train_model_on_text() takes 1 positional argument but 2 were given
+

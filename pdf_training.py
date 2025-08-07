@@ -9,7 +9,7 @@ import sys
 from datetime import datetime
 
 from .models import uploaded_txt_content, QuestionWorker
-from .shared import require_access_key, questions_cycle
+from .shared import require_access_key, questions_cycle, get_model_name
 from .AnkiExamCard import add_questions_to_deck
 
 
@@ -228,6 +228,13 @@ def show_txt_training_gui():
             train_model_on_text(content)
             loading_dialog.close()
             showInfo(f"Generated {len(questions_cycle['questions'])} questions from the content.")
+
+            model = get_model_name()
+            if not model:
+                showInfo("No model selected. Please set a model in the settings.")
+                return
+            
+            showInfo(f"model used: {model}")
             
             # Show results in a modal dialog
             output_dialog = QDialog(dlg)
