@@ -534,7 +534,13 @@ def on_bridge_cmd(cmd):
             def on_error(error_msg):
                 loading_dialog.close()
                 showInfo(f"API Error: {error_msg}")
-                btn.setEnabled(True)
+                try:
+                    # Re-enable Anki's built-in answer button if present
+                    reviewer = mw.reviewer if hasattr(mw, 'reviewer') else None
+                    if reviewer and reviewer.bottom.web:
+                        reviewer.bottom.web.eval("var b=document.getElementById('ansbut'); if(b){b.disabled=false; b.style.display='';}")
+                except Exception:
+                    pass
                 loading_dialog.worker = None
 
             #what to do when the worker is finished or errors

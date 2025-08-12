@@ -1,7 +1,9 @@
 import requests
+import os
 import time
+from typing import Optional
 
-SERVER_URL = "https://colestocker.fly.dev"  # Your Fly.io server URL
+SERVER_URL = os.getenv("ANKIEXAM_SERVER_URL", "https://colestocker.fly.dev")  # Server URL from env, default to Fly URL
 
 class AuthClient:
     def __init__(self):
@@ -106,6 +108,60 @@ class AuthClient:
         url = f"{SERVER_URL}/me"
         headers = {"Authorization": f"Bearer {self.token}"}
         r = requests.get(url, headers=headers)
+        return r.json()
+
+    def generate_questions(self, text_content: str, model_hint: Optional[str] = None):
+        """Ask server to generate questions. Server enforces allowed models and metering."""
+        if not self.is_authenticated():
+            raise Exception("Not authenticated")
+        url = f"{SERVER_URL}/api/generate_questions"
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+        }
+        payload = {"text_content": text_content}
+        if model_hint:
+            payload["model_hint"] = model_hint
+        r = requests.post(url, json=payload, headers=headers)
+        if r.status_code != 200:
+            raise Exception(f"Server error ({r.status_code}): {r.text}")
+        data = r.json()
+        questions = data.get("questions")
+        total_tokens = data.get("total_tokens", 0)
+        if not isinstance(questions, list) or not questions:
+            raise Exception("No questions returned from server")
+        return questions, total_tokens
+
+    def grade_answer(self, question: str, user_answer: str, model_hint: Optional[str] = None):
+        """Ask server to grade an answer. Server enforces allowed models and metering."""
+        if not self.is_authenticated():
+            raise Exception("Not authenticated")
+        url = f"{SERVER_URL}/api/grade_answer"
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+        }
+        payload = {"question": question, "user_answer": user_answer}
+        if model_hint:
+            payload["model_hint"] = model_hint
+        r = requests.post(url, json=payload, headers=headers)
+        if r.status_code != 200:
+            raise Exception(f"Server error ({r.status_code}): {r.text}")
+        data = r.json()
+        output = data.get("output", "")
+        total_tokens = data.get("total_tokens", 0)
+        if not output:
+            raise Exception("No output returned from server")
+        return output, total_tokens
+
+    def get_allowed_models(self):
+        if not self.is_authenticated():
+            raise Exception("Not authenticated")
+        url = f"{SERVER_URL}/api/allowed_models"
+        headers = {"Authorization": f"Bearer {self.token}"}
+        r = requests.get(url, headers=headers)
+        if r.status_code != 200:
+            raise Exception(f"Server error ({r.status_code}): {r.text}")
         return r.json()
         
     def update_balance(self, amount):

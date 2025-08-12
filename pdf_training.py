@@ -12,6 +12,11 @@ from .models import uploaded_txt_content, QuestionWorker
 from .shared import require_access_key, questions_cycle, get_model_name
 from .AnkiExamCard import add_questions_to_deck
 
+from .ClientAuth import AuthClient
+
+# Create a single AuthClient instance to be used throughout the addon
+auth_client = AuthClient()
+
 
 def _show_error_message(message):
     """Show error message in a thread-safe way"""
@@ -38,8 +43,7 @@ def train_model_on_text(text_content):
     This function is called from both the GUI and programmatically.
     Returns the number of tokens used.
     """
-    from .ClientAuth import AuthClient
-    auth_client = AuthClient()
+
     
     # Get initial token usage
     initial_tokens = auth_client.get_token_usage()
@@ -52,6 +56,7 @@ def train_model_on_text(text_content):
     
     # Use an event loop to wait for the worker to finish
     loop = QEventLoop()
+    error_message = {"msg": None}
     
     def on_finished(questions_text, questions_list):
         # Store the questions in a dictionary for later use
@@ -68,7 +73,12 @@ def train_model_on_text(text_content):
         loop.quit()
     
     def on_error(error_msg):
-        raise Exception(f"Error generating questions: {error_msg}")
+        # Capture error and quit loop to avoid hanging UI
+        error_message["msg"] = f"Error generating questions: {error_msg}"
+        try:
+            loop.quit()
+        except Exception:
+            pass
     
     worker.finished.connect(on_finished)
     worker.error.connect(on_error)
@@ -76,6 +86,9 @@ def train_model_on_text(text_content):
     
     # Wait for the worker to finish
     loop.exec()
+    # Propagate any error after the loop exits so callers can handle/close loaders
+    if error_message["msg"]:
+        raise Exception(error_message["msg"])
 
 
 
@@ -193,7 +206,7 @@ def show_txt_training_gui():
 
     def on_ok():
         dlg.accept()
-        from .__init__ import selection_window_gui
+        from __init__ import selection_window_gui
         selection_window_gui()
 
     def on_train_model():

@@ -1,7 +1,6 @@
 #import git 
 
 import os
-import requests
 from .shared import get_model_name
 
 print(f"Running Script...")
@@ -11,63 +10,20 @@ print(f"Running Script...")
 
 
 def together_api_input(UserAnswer, QuestionToAsk):
-    #api_key = os.environ.get("TOGETHER_API_KEY")
-    api_key = "642e67dafec91ef10ce54cf830e7af8d8112a17587b4941c470f8f5e34671514"
-    if not api_key:
-        raise Exception("TOGETHER_API_KEY environment variable not set.")
-
-    url = "https://api.together.xyz/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    data = {
-        "model": get_model_name(),  # Using the imported get_model_name function
-        "messages": [
-            {
-                "role": "system",
-               "content": (
-    "You are an expert reviewer, and serve to grade the user's response. "
-    "You should critique the user's response, and highlight any misunderstandings or potential oversights. "
-    "There is no need to include any disclaimers or additional information. "
-    "Keep your responses simple and avoid the use of over styled text. Based on the degree to which the user's response is correct, you must give a '%' score between 0 and 100. "
-    f"You are testing the user's knowledge on the following question: {QuestionToAsk}")
-            },
-            {
-                "role": "user",
-                "content": UserAnswer
-            }
-        ]
-    }
-    ##DEBUG PRINTS
-    #check how many tokens were used
-    #print(f"Total tokens used: {response.usage.total_tokens}")
-    #check how many tokens were used for the prompt
-    #print(f"Prompt tokens used: {response.usage.prompt_tokens}")
-
-    response = requests.post(url, headers=headers, json=data)
-    response.raise_for_status()
-    result = response.json()
-    output = result["choices"][0]["message"]["content"]
-    total_tokens = result.get("usage", {}).get("total_tokens", 0)
-    print(f"API returned total_tokens: {total_tokens}")  # Debug logging
-    
-    # Update token count in auth client
-    if total_tokens > 0:
-        from . import auth_client
-        if auth_client and auth_client.is_authenticated():
-            success = auth_client.add_tokens(total_tokens)
-            print(f"Token update success: {success}")  # Debug logging
-        else:
-            print("Warning: auth_client not available or not authenticated")
-    total_tokens = result["usage"]["total_tokens"]
-    
-    # Track token usage
+    # Route grading through the server to enforce model access and metering
+    from . import auth_client as global_auth_client
     from .ClientAuth import AuthClient
-    auth_client = AuthClient()
-    if total_tokens > 0:
-        auth_client.add_tokens(total_tokens)
+    client = global_auth_client if global_auth_client and global_auth_client.is_authenticated() else AuthClient()
+    if not client.is_authenticated():
+        raise Exception("Not authenticated. Please log in first.")
 
-
-        
+    system_prompt = (
+        "You are an expert reviewer, and serve to grade the user's response. "
+        "You should critique the user's response, and highlight any misunderstandings or potential oversights. "
+        "There is no need to include any disclaimers or additional information. "
+        "Keep your responses simple and avoid the use of over styled text. Based on the degree to which the user's response is correct, you must give a '%' score between 0 and 100. "
+        f"You are testing the user's knowledge on the following question: {QuestionToAsk}"
+    )
+    # Send to server; server chooses model based on plan
+    output, total_tokens = client.grade_answer(QuestionToAsk, UserAnswer, model_hint=get_model_name())
     return output, total_tokens
