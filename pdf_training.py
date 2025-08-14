@@ -6,6 +6,8 @@ from PyQt6.QtCore import QThread, pyqtSignal, QEventLoop
 import time
 import subprocess
 import sys
+import json
+import os
 from datetime import datetime
 
 from .models import uploaded_txt_content, QuestionWorker
@@ -37,13 +39,32 @@ def _add_questions_to_deck_safe(deck_id, questions):
 
 
 
-def train_model_on_text(text_content):
+def train_model_on_text(text_content, question_amount: int = None):
     """
     Train the model on the provided text content.
     This function is called from both the GUI and programmatically.
-    Returns the number of tokens used.
+    
+    Args:
+        text_content (str): The text content to generate questions from
+        question_amount (int, optional): Number of questions to generate. If None, reads from settings.json
+    
+    Returns:
+        int: The number of tokens used.
     """
-
+    
+    # Get question amount from settings if not provided
+    if question_amount is None:
+        settings_path = os.path.join(os.path.dirname(__file__), "settings.json")
+        try:
+            if os.path.exists(settings_path):
+                with open(settings_path, "r") as f:
+                    data = json.load(f)
+                    amount_str = data.get("question_amount", "10")
+                    question_amount = int(amount_str)
+            else:
+                question_amount = 10  # Default if no settings file exists
+        except Exception:
+            question_amount = 10  # Use default if there's any error
     
     # Get initial token usage
     initial_tokens = auth_client.get_token_usage()
@@ -51,8 +72,11 @@ def train_model_on_text(text_content):
     # Store the text content in the global variable
     uploaded_txt_content["content"] = text_content
     
+    # Get current model
+    current_model = get_model_name()
+    
     # Create and run the worker
-    worker = QuestionWorker()
+    worker = QuestionWorker(question_amount=question_amount)
     
     # Use an event loop to wait for the worker to finish
     loop = QEventLoop()
@@ -238,7 +262,19 @@ def show_txt_training_gui():
         QApplication.processEvents()
 
         try:
-            train_model_on_text(content)
+            # Get question amount from settings
+            settings_path = os.path.join(os.path.dirname(__file__), "settings.json")
+            question_amount = 10  # Default value
+            try:
+                if os.path.exists(settings_path):
+                    with open(settings_path, "r") as f:
+                        data = json.load(f)
+                        amount_str = data.get("question_amount", "10")
+                        question_amount = int(amount_str)
+            except Exception:
+                pass  # Use default if there's any error
+            
+            train_model_on_text(content, question_amount=question_amount)
             loading_dialog.close()
             showInfo(f"Generated {len(questions_cycle['questions'])} questions from the content.")
 

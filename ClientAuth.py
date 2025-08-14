@@ -110,7 +110,7 @@ class AuthClient:
         r = requests.get(url, headers=headers)
         return r.json()
 
-    def generate_questions(self, text_content: str, model_hint: Optional[str] = None):
+    def generate_questions(self, text_content: str, model_hint: Optional[str] = None, question_amount: Optional[int] = None):
         """Ask server to generate questions. Server enforces allowed models and metering."""
         if not self.is_authenticated():
             raise Exception("Not authenticated")
@@ -122,6 +122,8 @@ class AuthClient:
         payload = {"text_content": text_content}
         if model_hint:
             payload["model_hint"] = model_hint
+        if question_amount:
+            payload["question_amount"] = question_amount
         r = requests.post(url, json=payload, headers=headers)
         if r.status_code != 200:
             raise Exception(f"Server error ({r.status_code}): {r.text}")

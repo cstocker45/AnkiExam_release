@@ -45,7 +45,6 @@ import platform
 
 auth_client = AuthClient()
 
-
 #initialize uploaded pdf content
 uploaded_txt_content = {"content": ""}
 
@@ -703,7 +702,19 @@ def selection_window_gui():
                 questions_cycle["questions"] = []
                 questions_cycle["index"] = 0
                 
-                train_model_on_text(text_input.toPlainText())
+                # Load question amount from settings
+                settings_path = os.path.join(os.path.dirname(__file__), "settings.json")
+                question_amount = 10  # Default value
+                try:
+                    if os.path.exists(settings_path):
+                        with open(settings_path, "r") as f:
+                            data = json.load(f)
+                            amount_str = data.get("question_amount", "10")
+                            question_amount = int(amount_str)
+                except Exception:
+                    pass  # Use default if there's any error
+                
+                train_model_on_text(text_input.toPlainText(), question_amount=question_amount)
                 progress.hide()
                 train_btn.setEnabled(True)
                 train_btn.setText("Generate Questions")
@@ -926,6 +937,10 @@ def selection_window_gui():
 
             retry_btn.clicked.connect(on_stats)  # Clicking retry will reload the stats
 
+            
+
+
+
 
     stats_btn = create_sidebar_button(
         "Stat_image.png",
@@ -954,7 +969,7 @@ def selection_window_gui():
         title.setStyleSheet("""
             font-size: 24px;
             color: #2d3436;
-            margin: 20px;
+            margin: 8px;
             font-weight: bold;
         """)
         layout.addWidget(title)
@@ -970,7 +985,7 @@ def selection_window_gui():
         model_label.setStyleSheet("""
             font-size: 16px;
             color: #2d3436;
-            margin: 20px;
+            margin: 4px;
         """)
         model_layout.addWidget(model_label)
 
@@ -1034,6 +1049,7 @@ def selection_window_gui():
                 height: 12px;
             }
         """)
+
         
         # Center the combo box
         combo_container = QWidget()
@@ -1054,8 +1070,8 @@ def selection_window_gui():
         explanation.setStyleSheet("""
             font-size: 16px;
             color: #2d3436;
-            margin: 20px;
-            padding: 20px;
+            margin: 4px;
+            padding: 8px;
             background-color: #f1f2f6;
             border-radius: 10px;
         """)
@@ -1077,7 +1093,7 @@ def selection_window_gui():
         toggle_label.setStyleSheet("""
             font-size: 16px;
             color: #2d3436;
-            margin: 20px;
+            margin: 8px;
         """)
         toggle_layout.addWidget(toggle_label)
 
@@ -1093,7 +1109,7 @@ def selection_window_gui():
                         background-color: #4CAF50;
                         color: white;
                         border: none;
-                        padding: 10px;
+                        padding: 8px;
                         border-radius: 4px;
                         font-weight: bold;
                         min-width: 200px;
@@ -1109,7 +1125,7 @@ def selection_window_gui():
                         background-color: #e74c3c;
                         color: white;
                         border: none;
-                        padding: 10px;
+                        padding: 8px;
                         border-radius: 4px;
                         font-weight: bold;
                         min-width: 200px;
@@ -1148,8 +1164,8 @@ def selection_window_gui():
         toggle_explanation.setStyleSheet("""
             font-size: 14px;
             color: #2d3436;
-            margin: 20px;
-            padding: 20px;
+            margin: 4px;
+            padding: 8px;
             background-color: #f1f2f6;
             border-radius: 10px;
         """)
@@ -1171,6 +1187,108 @@ def selection_window_gui():
 
         model_combo.currentIndexChanged.connect(on_model_changed)
         layout.addWidget(model_container)
+     # Add question amount field and save button
+        import json
+        settings_path = os.path.join(os.path.dirname(__file__), "settings.json")
+        question_amount_label = QLabel("Number of Questions:")
+        question_amount_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        question_amount_label.setStyleSheet("font-size: 16px; color: #2d3436; margin: 4px; padding: 8px;")
+        model_layout.addWidget(question_amount_label)
+
+        # Create a container for centering the input
+        input_container = QWidget()
+        input_layout = QHBoxLayout()
+        input_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        input_layout.setContentsMargins(0, 0, 0, 0)  # Remove container margins
+        input_container.setLayout(input_layout)
+        
+        question_amount_input = QLineEdit()
+        question_amount_input.setPlaceholderText("Enter number of questions (e.g. 10)")
+        question_amount_input.setFixedWidth(300)
+        question_amount_input.setFixedHeight(36)  # Set a fixed height to match other elements
+        # Set both horizontal and vertical alignment
+        question_amount_input.setAlignment(Qt.AlignmentFlag.AlignCenter | Qt.AlignmentFlag.AlignVCenter)
+        question_amount_input.setStyleSheet("""
+            QLineEdit {
+                border: 1px solid #dfe6e9;
+                border-radius: 4px;
+                padding: 4px;
+                font-size: 14px;
+                background-color: white;
+                color: #2d3436;
+                margin: 4px;
+            }
+        """)
+        
+        input_layout.addWidget(question_amount_input)
+        model_layout.addWidget(input_container)
+
+        # Create a container for centering the save button
+        save_btn_container = QWidget()
+        save_btn_layout = QHBoxLayout()
+        save_btn_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        save_btn_container.setLayout(save_btn_layout)
+        
+        save_btn = QPushButton("Save Settings")
+        save_btn.setFixedWidth(200)
+        save_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border: none;
+                margin: 4px;
+                padding: 8px;
+                border-radius: 4px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+        """)
+
+        question_input_explanation = QLabel(
+            "Set the number of questions to generate from your training data or existing deck."
+        )
+        question_input_explanation.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        question_input_explanation.setWordWrap(True)
+        question_input_explanation.setStyleSheet("""
+            font-size: 14px;
+            color: #2d3436;
+            margin: 4px;
+            padding: 8px;
+            background-color: #f1f2f6;
+            border-radius: 10px;
+        """)
+
+        model_layout.addWidget(question_input_explanation)
+        save_btn_layout.addWidget(save_btn)
+        model_layout.addWidget(save_btn_container)
+
+        def load_settings():
+            if os.path.exists(settings_path):
+                try:
+                    with open(settings_path, "r") as f:
+                        data = json.load(f)
+                        val = str(data.get("question_amount", ""))
+                        question_amount_input.setText(val)
+                except Exception:
+                    pass
+        load_settings()
+
+        def save_settings():
+            val = question_amount_input.text().strip()
+            try:
+                data = {}
+                if os.path.exists(settings_path):
+                    with open(settings_path, "r") as f:
+                        data = json.load(f)
+                data["question_amount"] = val
+                with open(settings_path, "w") as f:
+                    json.dump(data, f)
+                showInfo(f"Saved: Number of questions set to {val}")
+            except Exception as e:
+                showInfo(f"Error saving settings: {e}")
+        save_btn.clicked.connect(save_settings)
 
     settings_btn = create_sidebar_button(
         "settings_icon.png",
