@@ -1,7 +1,7 @@
 # Welcome to **AnkiExam** – Smarter Learning, Better Retention
 
 Thank you for choosing **AnkiExam**.  
-Our goal is simple: to help you learn **more efficiently** and **retain information longer** by transforming the way you review.
+The goal of AnkiExam is simple: to help you learn **more efficiently** and **retain information longer** by transforming the way you review.
 
 ---
 
