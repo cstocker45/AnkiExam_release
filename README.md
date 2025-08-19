@@ -26,7 +26,7 @@ By integrating intelligent question generation and AI-driven assessment into you
 To get started, watch the demo:
 
 [<img src="https://youtu.be/ebjjP4HIHY8/hqdefault.jpg" width="600" height="300"
-/>](https://www.youtube.com/embed/<VIDEO_ID>)
+/>](https://www.youtube.com/embed/ebjjP4HIHY8)
 
 AnkiExam is currently in open-beta. User demand will be assessed, and server limits appropriately improved, given significant traffic.
 
