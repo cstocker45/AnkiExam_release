@@ -1,42 +1,71 @@
-Welcome to AnkiExam – Smarter Learning, Better Retention
+# Welcome to **AnkiExam** – Smarter Learning, Better Retention
 
-Thank you for choosing AnkiExam. Our goal is simple: to help you learn more efficiently and retain information longer by transforming the way you review.
+Thank you for choosing **AnkiExam**.  
+Our goal is simple: to help you learn **more efficiently** and **retain information longer** by transforming the way you review.
 
-Traditional long review sessions often lead to mental fatigue, reduced focus, and overconfidence. It becomes harder to accurately judge what you truly know versus what you only think you know. AnkiExam solves this problem by integrating advanced AI tools directly into your study process, giving you an interactive, adaptive, and personalized learning experience.
+---
 
-With AnkiExam, you can:
+## Why AnkiExam?
 
-Turn passive review into active assessment
-Let your AI examiner challenge you in real time. Get instant feedback on your answers and an accurate assessment of your understanding—no guessing, no blind spots.
+Traditional long review sessions often lead to:
+- Mental fatigue and reduced focus  
+- Overconfidence in what you *think* you know  
+- Difficulty accurately assessing your knowledge  
 
-Generate smarter, targeted questions
-Use your existing decks and let AnkiExam create additional, customized questions designed to fill knowledge gaps and deepen comprehension—without adding extra work.
+AnkiExam solves these challenges by integrating **advanced AI tools** directly into your study process, giving you an **interactive, adaptive, and personalized learning experience**.
 
-Leverage your own study materials
-Upload slides, textbook chapters, or notes directly into AnkiExam. The AI will extract key concepts and transform them into high-quality, exam-style questions tailored to your content.
+---
 
-Practice long-answer and critical-thinking questions
-Go beyond flashcards. Generate open-ended, essay-style questions and have the AI evaluate your responses, highlighting strengths and areas for improvement.
+## What You Can Do with AnkiExam
 
-Personalize your learning experience
-Whether you’re preparing for standardized exams, medical school, law school, or personal projects, AnkiExam adapts to your pace and goals, ensuring that every review session is productive and focused.
+### 1. Turn Passive Review into Active Assessment  
+Let your **AI examiner** challenge you in real time. Get **instant feedback** on your answers and an accurate assessment of your understanding—no guessing, no blind spots.
 
-By integrating intelligent question generation and AI-driven assessment into your Anki workflow, AnkiExam turns your decks into a powerful, interactive learning system. Spend less time wondering what to study and more time mastering it.
+---
 
-To get started, watch the demo:
+### 2. Generate Smarter, Targeted Questions  
+Use your existing decks and let AnkiExam automatically create **customized, high-quality questions** designed to strengthen weak areas and deepen comprehension—**without adding extra work**.
+
+---
+
+### 3. Leverage Your Own Study Materials  
+Upload **slides, textbook chapters, or notes** directly into AnkiExam.  
+The AI extracts key concepts and transforms them into **exam-style questions** tailored to your content.
+
+---
+
+### 4. Practice Long-Answer & Critical-Thinking Questions  
+Go beyond flashcards. Generate **open-ended, essay-style questions** and let the AI **evaluate your responses**, highlighting strengths and areas for improvement.
+
+---
+
+### 5. Personalize Your Learning Experience  
+Whether you’re preparing for **standardized exams, medical school, law school**, or pursuing personal learning goals, AnkiExam adapts to **your pace** and **your needs**, ensuring every review session is productive and focused.
+
+---
+
+## Watch the Demo
 
 [<img src="https://img.youtube.com/vi/ebjjP4HIHY8/hqdefault.jpg" width="600" height="450" />](https://www.youtube.com/embed/ebjjP4HIHY8)
 
+---
 
-AnkiExam is currently in open-beta. User demand will be assessed, and server limits appropriately improved, given significant traffic.
+## Beta Status
 
-The open-beta model is currently only supporting free-models from the host: together-ai. Subsequent versions will include faster, and more accurate models at limited cost.
+AnkiExam is currently in **open beta**. User demand will be monitored, and **server capacity will be scaled** as needed.
 
-AnkiExam is commited to staying free, but server upkeep requires financing.
+- The open-beta model currently uses **free models** from the host: **Together AI**.  
+- Future versions will integrate **faster and more accurate models** at a limited cost.  
+- While AnkiExam is committed to **remaining free**, server upkeep requires ongoing support.
 
-If you resonate with the goal of AnkiExam, and wish to support further independent development, please consider donating: https://www.paypal.com/donate/?hosted_button_id=DVZWGMNHTHN4Q
+---
 
-Thank you very much, and happy learning.
+## Support Development
 
+If you believe in the vision of AnkiExam and would like to support **independent development**, please consider donating:  
 
+[**Donate via PayPal**](https://www.paypal.com/donate/?hosted_button_id=DVZWGMNHTHN4Q)
 
+---
+
+Thank you for your support, and **happy learning**!
