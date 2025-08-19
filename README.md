@@ -66,6 +66,8 @@ If you believe in the vision of AnkiExam and would like to support **independent
 
 [**Donate via PayPal**](https://www.paypal.com/donate/?hosted_button_id=DVZWGMNHTHN4Q)
 
+If you encounter any issues, or would like to suggest new changes, contact me at ankiexam0@gmail.com, or submit issues directly on GitHub
+
 ---
 
 Thank you for your support, and **happy learning**!
